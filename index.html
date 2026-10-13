@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="light" />
+  <title>Manager Memo — Word-style Editor Prototype</title>
+</head>
+<body>
+  <div id="application">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">N</div>
+        <div><strong>Night Memo</strong><small>Manager document prototype</small></div>
+      </div>
+      <div class="top-right"><span class="demo-pill">SYNTHETIC DATA ONLY</span><span id="save-status" class="save-status" role="status">Not saved</span></div>
+    </header>
+
+    <main class="workspace">
+      <section class="document-workspace" aria-label="Document editor">
+        <div class="ribbon" id="ribbon">
+          <div class="ribbon-tabs" role="tablist" aria-label="Editor sections">
+            <button class="tab active" role="tab" aria-selected="true" type="button" data-tab="home">Home</button>
+            <button class="tab" role="tab" aria-selected="false" type="button" data-tab="insert">Insert</button>
+            <button class="tab" role="tab" aria-selected="false" type="button" data-tab="layout">Layout</button>
+            <span class="ribbon-label">Word-style controls • free editor</span>
+          </div>
+          <div class="toolbar" data-panel="home">
+            <div class="tool-group">
+              <label class="tool-label">Font
+                <select id="font" aria-label="Font family"><option value="Arial">Arial</option><option value="Times New Roman">Times New Roman</option><option value="Microsoft YaHei">Microsoft YaHei</option></select>
+              </label>
+              <label class="tool-label">Size
+                <select id="font-size" aria-label="Font size"><option value="10">10</option><option value="12" selected>12</option><option value="14">14</option><option value="16">16</option><option value="18">18</option><option value="22">22</option></select>
+              </label>
+            </div>
+            <div class="tool-group" aria-label="Text formatting">
+              <button class="tool icon-tool" data-cmd="bold" type="button" title="Bold (Ctrl+B)" aria-label="Bold"><b>B</b></button>
+              <button class="tool icon-tool" data-cmd="italic" type="button" title="Italic" aria-label="Italic"><i>I</i></button>
+              <button class="tool icon-tool" data-cmd="underline" type="button" title="Underline" aria-label="Underline"><u>U</u></button>
+              <button class="tool" data-cmd="clear" type="button" title="Clear formatting">Clear</button>
+            </div>
+            <div class="tool-group" aria-label="Paragraph formatting">
+              <button class="tool" data-cmd="left" type="button">Left</button>
+              <button class="tool" data-cmd="center" type="button">Centre</button>
+              <button class="tool" data-cmd="right" type="button">Right</button>
+              <button class="tool" data-cmd="bullets" type="button">• List</button>
+              <button class="tool" data-cmd="numbers" type="button">1. List</button>
+            </div>
+            <div class="tool-group"><button class="tool" data-cmd="undo" type="button">↶ Undo</button><button class="tool" data-cmd="redo" type="button">↷ Redo</button></div>
+          </div>
+          <div class="toolbar hidden" data-panel="insert">
+            <div class="tool-group"><button class="tool" data-cmd="table" type="button">Insert 3 × 3 table</button><button class="tool" data-cmd="pageBreak" type="button">Page break</button></div>
+            <span class="toolbar-help">Place the cursor in the document first.</span>
+          </div>
+          <div class="toolbar hidden" data-panel="layout">
+            <div class="tool-group"><button class="tool" data-cmd="a4" type="button">A4 portrait</button><button class="tool" data-cmd="print" type="button">Print / PDF</button></div>
+            <span class="toolbar-help">Page layout and print use the editor's built-in functionality.</span>
+          </div>
+        </div>
+        <div class="actions-bar">
+          <div class="hint"><span class="hint-dot" aria-hidden="true"></span><strong>Click inside the white page and start typing.</strong> Add text before, between or after the reporting tables.</div>
+          <div class="action-buttons">
+            <button id="save" class="primary-btn" type="button">Save draft</button>
+            <button id="reopen" class="neutral-btn" type="button">Reopen</button>
+            <button id="download" class="neutral-btn" type="button">Export JSON</button>
+            <button id="upload" class="neutral-btn" type="button">Import JSON</button>
+            <input id="upload-file" type="file" accept=".json,application/json" hidden />
+            <button id="print" class="neutral-btn" type="button">Print</button>
+          </div>
+        </div>
+        <div class="paper-viewport" id="paper-viewport"><div id="editor" class="canvas-editor"></div></div>
+        <footer class="statusbar"><span>Prototype editor • A4 • English / 繁體中文 test</span><span id="document-status">Ready</span></footer>
+      </section>
+
+      <aside class="sidebar" aria-label="Synthetic source data simulator">
+        <div class="sidebar-header"><h2>Source data simulator</h2><span class="small-tag">Demo only</span></div>
+        <p>Simulate a ward amendment after the N.O. has already typed into the document. No real Ward Memo or Supabase connection.</p>
+        <div class="source-card">
+          <h3>Ward F10 · admissions</h3>
+          <div class="source-grid">
+            <label>PM Memo<input id="pm-input" type="number" min="0" max="9999" step="1" value="3"/></label>
+            <label>Night Memo<input id="night-input" type="number" min="0" max="9999" step="1" value="2"/></label>
+          </div>
+          <div class="source-totals">Manager total: <strong id="combined-total">5</strong></div>
+          <button id="regenerate" type="button" class="primary-btn full">Update generated figures</button>
+        </div>
+        <div id="regen-result" class="result" aria-live="polite">Try changing PM admissions to 6, then press Update. Your handwritten notes should remain.</div>
+        <div class="tip-list"><h3>Try these tasks</h3>
+          <label><input type="checkbox"/> Type a paragraph in white space</label>
+          <label><input type="checkbox"/> Edit between the two tables</label>
+          <label><input type="checkbox"/> Change the PM figure and regenerate</label>
+          <label><input type="checkbox"/> Manually alter a generated value; regenerate again</label>
+          <label><input type="checkbox"/> Save, reopen, then print the A4 memo</label>
+        </div>
+        <div class="side-actions"><button id="reset" class="quiet-btn" type="button">Reset demonstration</button></div>
+        <div class="privacy-note"><strong>Not for clinical information.</strong> Saving uses this browser's local storage; JSON exports are downloaded to your computer. No server receives document data from this prototype.</div>
+      </aside>
+    </main>
+  </div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
