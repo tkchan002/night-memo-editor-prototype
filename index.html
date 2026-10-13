@@ -4,99 +4,161 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="color-scheme" content="light" />
-  <title>Manager Memo — Word-style Editor Prototype</title>
+  <title>Manager Memo — Document Editor Prototype</title>
 </head>
 <body>
+  <svg aria-hidden="true" class="svg-symbols" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="ic-file" viewBox="0 0 24 24"><path d="M6 2.75h8l4.5 4.5V21.25H6z"/><path d="M14 3v5h5M9 12h7M9 16h7"/></symbol>
+    <symbol id="ic-save" viewBox="0 0 24 24"><path d="M4 3h14l3 3v15H3V3zM7 3v7h10V3M7 21v-8h10v8M14 3v5"/></symbol>
+    <symbol id="ic-print" viewBox="0 0 24 24"><path d="M6 9V3h12v6M6 18H3v-7h18v7h-3M6 15h12v6H6zM17 12h1"/></symbol>
+    <symbol id="ic-undo" viewBox="0 0 24 24"><path d="m9 7-5 5 5 5M4 12h10a6 6 0 0 1 6 6"/></symbol>
+    <symbol id="ic-redo" viewBox="0 0 24 24"><path d="m15 7 5 5-5 5m5 0H10a6 6 0 0 0-6 6"/></symbol>
+    <symbol id="ic-table" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="1"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></symbol>
+    <symbol id="ic-panel" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16M6 9h6M6 13h6"/></symbol>
+    <symbol id="ic-close" viewBox="0 0 24 24"><path d="M5 5l14 14M19 5 5 19"/></symbol>
+    <symbol id="ic-chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+    <symbol id="ic-download" viewBox="0 0 24 24"><path d="M12 3v12m-4-4 4 4 4-4M4 18v3h16v-3"/></symbol>
+    <symbol id="ic-upload" viewBox="0 0 24 24"><path d="M12 17V5m-4 4 4-4 4 4M4 18v3h16v-3"/></symbol>
+    <symbol id="ic-align-left" viewBox="0 0 24 24"><path d="M4 5h16M4 9h11M4 13h16M4 17h11"/></symbol>
+    <symbol id="ic-align-center" viewBox="0 0 24 24"><path d="M4 5h16M7 9h10M4 13h16M7 17h10"/></symbol>
+    <symbol id="ic-align-right" viewBox="0 0 24 24"><path d="M4 5h16M9 9h11M4 13h16M9 17h11"/></symbol>
+    <symbol id="ic-list" viewBox="0 0 24 24"><path d="M9 6h12M9 12h12M9 18h12M4 6h.01M4 12h.01M4 18h.01"/></symbol>
+    <symbol id="ic-number" viewBox="0 0 24 24"><path d="M9 6h12M9 12h12M9 18h12M3 5h2v4M3 13c0-2 3-2 3 0s-3 2-3 4h3"/></symbol>
+    <symbol id="ic-check" viewBox="0 0 24 24"><path d="m4 12 5 5L20 6"/></symbol>
+    <symbol id="ic-plus" viewBox="0 0 24 24"><path d="M12 4v16M4 12h16"/></symbol>
+    <symbol id="ic-minus" viewBox="0 0 24 24"><path d="M4 12h16"/></symbol>
+  </svg>
   <div id="application">
-    <header class="topbar">
-      <div class="brand">
-        <div class="brand-mark" aria-hidden="true">N</div>
-        <div><strong>Night Memo</strong><small>Manager document prototype</small></div>
+    <header class="titlebar">
+      <div class="titlebar-left">
+        <div class="app-emblem" aria-hidden="true"><svg class="ico"><use href="#ic-file"/></svg></div>
+        <div class="app-ident"><strong>Manager Memo</strong><span>Word-style editor prototype</span></div>
+        <span class="title-separator"></span>
+        <span class="demo-chip">SYNTHETIC DATA</span>
       </div>
-      <div class="top-right"><span class="demo-pill">SYNTHETIC DATA ONLY</span><span id="save-status" class="save-status" role="status">Not saved</span></div>
+      <div class="quick-actions">
+        <span id="save-status" class="save-status" role="status">Unsaved changes</span>
+        <button class="header-icon" data-cmd="undo" type="button" title="Undo" aria-label="Undo"><svg class="ico"><use href="#ic-undo"/></svg></button>
+        <button class="header-icon" data-cmd="redo" type="button" title="Redo" aria-label="Redo"><svg class="ico"><use href="#ic-redo"/></svg></button>
+        <button id="save" class="header-save" type="button"><svg class="ico"><use href="#ic-save"/></svg> Save</button>
+      </div>
     </header>
-
-    <main class="workspace">
-      <section class="document-workspace" aria-label="Document editor">
-        <div class="ribbon" id="ribbon">
-          <div class="ribbon-tabs" role="tablist" aria-label="Editor sections">
-            <button class="tab active" role="tab" aria-selected="true" type="button" data-tab="home">Home</button>
-            <button class="tab" role="tab" aria-selected="false" type="button" data-tab="insert">Insert</button>
-            <button class="tab" role="tab" aria-selected="false" type="button" data-tab="layout">Layout</button>
-            <span class="ribbon-label">Word-style controls • free editor</span>
-          </div>
-          <div class="toolbar" data-panel="home">
-            <div class="tool-group">
-              <label class="tool-label">Font
-                <select id="font" aria-label="Font family"><option value="Arial">Arial</option><option value="Times New Roman">Times New Roman</option><option value="Microsoft YaHei">Microsoft YaHei</option></select>
-              </label>
-              <label class="tool-label">Size
-                <select id="font-size" aria-label="Font size"><option value="10">10</option><option value="12" selected>12</option><option value="14">14</option><option value="16">16</option><option value="18">18</option><option value="22">22</option></select>
-              </label>
+    <main class="document-workspace" aria-label="Manager Memo editor">
+      <section class="ribbon" id="ribbon" aria-label="Document editing ribbon">
+        <div class="ribbon-tabs" role="tablist" aria-label="Editor tabs">
+          <button class="ribbon-tab file-tab" type="button" role="tab" aria-selected="false" data-tab="file" aria-controls="panel-file">File</button>
+          <button class="ribbon-tab active" type="button" role="tab" aria-selected="true" data-tab="home" aria-controls="panel-home">Home</button>
+          <button class="ribbon-tab" type="button" role="tab" aria-selected="false" data-tab="insert" aria-controls="panel-insert">Insert</button>
+          <button class="ribbon-tab" type="button" role="tab" aria-selected="false" data-tab="layout" aria-controls="panel-layout">Layout</button>
+          <button class="ribbon-tab" type="button" role="tab" aria-selected="false" data-tab="view" aria-controls="panel-view">View</button>
+          <span class="ribbon-spacer"></span>
+          <button type="button" class="data-toggle" id="open-data" aria-expanded="false" aria-controls="source-panel"><svg class="ico"><use href="#ic-panel"/></svg> Ward Data <span class="data-pill">Demo</span></button>
+        </div>
+        <div class="ribbon-panel" id="panel-home" data-panel="home" role="tabpanel">
+          <div class="ribbon-group" aria-label="Font formatting">
+            <div class="font-settings">
+              <select id="font" aria-label="Font family"><option value="Arial">Arial</option><option value="Times New Roman">Times New Roman</option><option value="Microsoft YaHei">Microsoft YaHei</option></select>
+              <select id="font-size" aria-label="Font size"><option value="10">10</option><option value="12" selected>12</option><option value="14">14</option><option value="16">16</option><option value="18">18</option><option value="22">22</option></select>
             </div>
-            <div class="tool-group" aria-label="Text formatting">
-              <button class="tool icon-tool" data-cmd="bold" type="button" title="Bold (Ctrl+B)" aria-label="Bold"><b>B</b></button>
-              <button class="tool icon-tool" data-cmd="italic" type="button" title="Italic" aria-label="Italic"><i>I</i></button>
-              <button class="tool icon-tool" data-cmd="underline" type="button" title="Underline" aria-label="Underline"><u>U</u></button>
-              <button class="tool" data-cmd="clear" type="button" title="Clear formatting">Clear</button>
+            <div class="tool-row">
+              <button type="button" class="ribbon-tool letter" data-cmd="bold" aria-label="Bold" title="Bold (Cmd/Ctrl+B)"><b>B</b></button>
+              <button type="button" class="ribbon-tool letter" data-cmd="italic" aria-label="Italic" title="Italic (Cmd/Ctrl+I)"><i>I</i></button>
+              <button type="button" class="ribbon-tool letter" data-cmd="underline" aria-label="Underline" title="Underline (Cmd/Ctrl+U)"><u>U</u></button>
+              <button type="button" class="ribbon-tool letter" data-cmd="strike" aria-label="Strikethrough" title="Strikethrough"><s>ab</s></button>
+              <label class="color-tool" title="Text colour"><span class="color-letter">A</span><input id="font-color" aria-label="Text colour" type="color" value="#202020"/></label>
+              <button type="button" class="ribbon-tool clear-tool" data-cmd="clear" title="Clear formatting">Clear</button>
             </div>
-            <div class="tool-group" aria-label="Paragraph formatting">
-              <button class="tool" data-cmd="left" type="button">Left</button>
-              <button class="tool" data-cmd="center" type="button">Centre</button>
-              <button class="tool" data-cmd="right" type="button">Right</button>
-              <button class="tool" data-cmd="bullets" type="button">• List</button>
-              <button class="tool" data-cmd="numbers" type="button">1. List</button>
+            <div class="group-caption">Font</div>
+          </div>
+          <div class="ribbon-group" aria-label="Paragraph formatting">
+            <div class="tool-row paragraph-row">
+              <button type="button" class="ribbon-tool" data-cmd="bullets" aria-label="Bulleted list" title="Bulleted list"><svg class="ico"><use href="#ic-list"/></svg></button>
+              <button type="button" class="ribbon-tool" data-cmd="numbers" aria-label="Numbered list" title="Numbered list"><svg class="ico"><use href="#ic-number"/></svg></button>
             </div>
-            <div class="tool-group"><button class="tool" data-cmd="undo" type="button">↶ Undo</button><button class="tool" data-cmd="redo" type="button">↷ Redo</button></div>
+            <div class="tool-row paragraph-row">
+              <button type="button" class="ribbon-tool" data-cmd="left" aria-label="Align left" title="Align left"><svg class="ico"><use href="#ic-align-left"/></svg></button>
+              <button type="button" class="ribbon-tool" data-cmd="center" aria-label="Align center" title="Centre"><svg class="ico"><use href="#ic-align-center"/></svg></button>
+              <button type="button" class="ribbon-tool" data-cmd="right" aria-label="Align right" title="Align right"><svg class="ico"><use href="#ic-align-right"/></svg></button>
+            </div>
+            <div class="group-caption">Paragraph</div>
           </div>
-          <div class="toolbar hidden" data-panel="insert">
-            <div class="tool-group"><button class="tool" data-cmd="table" type="button">Insert 3 × 3 table</button><button class="tool" data-cmd="pageBreak" type="button">Page break</button></div>
-            <span class="toolbar-help">Place the cursor in the document first.</span>
-          </div>
-          <div class="toolbar hidden" data-panel="layout">
-            <div class="tool-group"><button class="tool" data-cmd="a4" type="button">A4 portrait</button><button class="tool" data-cmd="print" type="button">Print / PDF</button></div>
-            <span class="toolbar-help">Page layout and print use the editor's built-in functionality.</span>
+          <div class="ribbon-group compact-group" aria-label="Editing">
+            <div class="tool-stack">
+              <button type="button" class="ribbon-text-btn" data-cmd="undo"><svg class="ico"><use href="#ic-undo"/></svg> Undo</button>
+              <button type="button" class="ribbon-text-btn" data-cmd="redo"><svg class="ico"><use href="#ic-redo"/></svg> Redo</button>
+            </div>
+            <div class="group-caption">Editing</div>
           </div>
         </div>
-        <div class="actions-bar">
-          <div class="hint"><span class="hint-dot" aria-hidden="true"></span><strong>Click inside the white page and start typing.</strong> Add text before, between or after the reporting tables.</div>
-          <div class="action-buttons">
-            <button id="save" class="primary-btn" type="button">Save draft</button>
-            <button id="reopen" class="neutral-btn" type="button">Reopen</button>
-            <button id="download" class="neutral-btn" type="button">Export JSON</button>
-            <button id="upload" class="neutral-btn" type="button">Import JSON</button>
+        <div class="ribbon-panel" id="panel-insert" data-panel="insert" role="tabpanel" hidden>
+          <div class="ribbon-group">
+            <button class="large-tool" data-cmd="table" type="button"><svg class="ico"><use href="#ic-table"/></svg><span>Insert table</span><small>3 × 3</small></button>
+            <button class="large-tool" data-cmd="pageBreak" type="button"><svg class="ico"><use href="#ic-file"/></svg><span>Page break</span></button>
+            <div class="group-caption">Pages &amp; Tables</div>
+          </div>
+          <div class="ribbon-group table-group">
+            <div class="tool-stack">
+              <button class="ribbon-text-btn" data-cmd="tableRow" type="button">Add row below</button>
+              <button class="ribbon-text-btn" data-cmd="tableColumn" type="button">Add column right</button>
+            </div>
+            <div class="tool-stack">
+              <button class="ribbon-text-btn" data-cmd="mergeCells" type="button">Merge selected cells</button>
+              <button class="ribbon-text-btn" data-cmd="deleteTable" type="button">Delete table</button>
+            </div>
+            <div class="group-caption">Table tools (place cursor in table)</div>
+          </div>
+        </div>
+        <div class="ribbon-panel" id="panel-layout" data-panel="layout" role="tabpanel" hidden>
+          <div class="ribbon-group">
+            <button class="large-tool" data-cmd="a4" type="button"><svg class="ico"><use href="#ic-file"/></svg><span>A4 portrait</span><small>Default margins</small></button>
+            <button class="large-tool" data-cmd="print" type="button"><svg class="ico"><use href="#ic-print"/></svg><span>Print / PDF</span></button>
+            <div class="group-caption">Page setup</div>
+          </div>
+          <p class="ribbon-explainer">The pages are rendered by Canvas Editor. Print uses the editor's real print output.</p>
+        </div>
+        <div class="ribbon-panel" id="panel-view" data-panel="view" role="tabpanel" hidden>
+          <div class="ribbon-group">
+            <button class="large-tool" id="view-data" type="button"><svg class="ico"><use href="#ic-panel"/></svg><span>Ward Data</span><small>Show / hide</small></button>
+            <div class="group-caption">Panels</div>
+          </div>
+          <div class="ribbon-group">
+            <div class="tool-row"><button class="ribbon-tool zoom-tool" data-cmd="zoomOut" aria-label="Zoom out" type="button"><svg class="ico"><use href="#ic-minus"/></svg></button><button class="ribbon-tool zoom-tool" data-cmd="zoomReset" aria-label="Reset zoom" type="button">100%</button><button class="ribbon-tool zoom-tool" data-cmd="zoomIn" aria-label="Zoom in" type="button"><svg class="ico"><use href="#ic-plus"/></svg></button></div>
+            <div class="group-caption">Zoom</div>
+          </div>
+        </div>
+        <div class="ribbon-panel" id="panel-file" data-panel="file" role="tabpanel" hidden>
+          <div class="ribbon-group file-actions">
+            <button class="ribbon-text-btn" data-action="save" type="button"><svg class="ico"><use href="#ic-save"/></svg> Save draft</button>
+            <button id="reopen" class="ribbon-text-btn" type="button">Reopen saved draft</button>
+            <div class="group-caption">Local document</div>
+          </div>
+          <div class="ribbon-group file-actions">
+            <button id="download" class="ribbon-text-btn" type="button"><svg class="ico"><use href="#ic-download"/></svg> Export JSON</button>
+            <button id="upload" class="ribbon-text-btn" type="button"><svg class="ico"><use href="#ic-upload"/></svg> Import JSON</button>
             <input id="upload-file" type="file" accept=".json,application/json" hidden />
-            <button id="print" class="neutral-btn" type="button">Print</button>
+            <div class="group-caption">Transfer demo data</div>
+          </div>
+          <div class="ribbon-group">
+            <button id="print" class="large-tool" type="button"><svg class="ico"><use href="#ic-print"/></svg><span>Print</span></button>
+            <div class="group-caption">Output</div>
           </div>
         </div>
-        <div class="paper-viewport" id="paper-viewport"><div id="editor" class="canvas-editor"></div></div>
-        <footer class="statusbar"><span>Prototype editor • A4 • English / 繁體中文 test</span><span id="document-status">Ready</span></footer>
       </section>
-
-      <aside class="sidebar" aria-label="Synthetic source data simulator">
-        <div class="sidebar-header"><h2>Source data simulator</h2><span class="small-tag">Demo only</span></div>
-        <p>Simulate a ward amendment after the N.O. has already typed into the document. No real Ward Memo or Supabase connection.</p>
-        <div class="source-card">
-          <h3>Ward F10 · admissions</h3>
-          <div class="source-grid">
-            <label>PM Memo<input id="pm-input" type="number" min="0" max="9999" step="1" value="3"/></label>
-            <label>Night Memo<input id="night-input" type="number" min="0" max="9999" step="1" value="2"/></label>
-          </div>
-          <div class="source-totals">Manager total: <strong id="combined-total">5</strong></div>
-          <button id="regenerate" type="button" class="primary-btn full">Update generated figures</button>
-        </div>
-        <div id="regen-result" class="result" aria-live="polite">Try changing PM admissions to 6, then press Update. Your handwritten notes should remain.</div>
-        <div class="tip-list"><h3>Try these tasks</h3>
-          <label><input type="checkbox"/> Type a paragraph in white space</label>
-          <label><input type="checkbox"/> Edit between the two tables</label>
-          <label><input type="checkbox"/> Change the PM figure and regenerate</label>
-          <label><input type="checkbox"/> Manually alter a generated value; regenerate again</label>
-          <label><input type="checkbox"/> Save, reopen, then print the A4 memo</label>
-        </div>
-        <div class="side-actions"><button id="reset" class="quiet-btn" type="button">Reset demonstration</button></div>
-        <div class="privacy-note"><strong>Not for clinical information.</strong> Saving uses this browser's local storage; JSON exports are downloaded to your computer. No server receives document data from this prototype.</div>
-      </aside>
+      <div class="writing-tip" id="writing-tip"><svg class="ico"><use href="#ic-file"/></svg><span><strong>Click on the white page and start typing.</strong> Add text before, between, or after the generated tables.</span><button type="button" id="dismiss-tip" aria-label="Dismiss editing tip"><svg class="ico"><use href="#ic-close"/></svg></button></div>
+      <div class="page-stage" id="paper-viewport"><div class="document-column"><div class="ruler" aria-hidden="true"><div class="ruler-marks"></div></div><div id="editor" class="canvas-editor"></div></div></div>
+      <footer class="statusbar"><div class="status-left"><span id="page-indicator">Page 1</span><span class="status-divider"></span><span id="word-count">Word count: —</span><span class="status-divider"></span><span class="status-demo">Demo document · not for patient data</span></div><div class="status-right"><span id="document-status" role="status" aria-live="polite">Ready</span><div class="status-zoom"><button data-cmd="zoomOut" aria-label="Zoom out" title="Zoom out" type="button">−</button><span id="zoom-label">100%</span><button data-cmd="zoomIn" aria-label="Zoom in" title="Zoom in" type="button">+</button></div></div></footer>
     </main>
+    <div id="panel-scrim" class="panel-scrim" hidden></div>
+    <aside id="source-panel" class="source-panel" aria-label="Synthetic Ward Data" aria-hidden="true">
+      <div class="side-head"><div><span class="side-kicker">TEST DATA · NOT CLINICAL</span><h2>Ward Data</h2><p>Simulate incoming PM / Night changes</p></div><button id="close-data" class="close-panel" type="button" aria-label="Close Ward Data"><svg class="ico"><use href="#ic-close"/></svg></button></div>
+      <div class="side-body">
+        <div class="source-card"><h3>F10 · Admission figures</h3><p>Update the sample reporting values, then regenerate the linked cells without replacing your writing.</p><div class="source-grid"><label>PM Memo<input id="pm-input" type="number" min="0" max="9999" step="1" value="3"/></label><label>Night Memo<input id="night-input" type="number" min="0" max="9999" step="1" value="2"/></label></div><div class="source-totals">Current reported total <strong id="combined-total">5</strong></div><button id="regenerate" type="button" class="primary-btn full">Update generated figures</button></div>
+        <div id="regen-result" class="result" aria-live="polite">Example: change PM admissions from 3 to 6, update, then check that your own writing is unchanged.</div>
+        <details class="test-checklist"><summary>Prototype evaluation checklist</summary><div class="checklist-body"><label><input type="checkbox"/> Type a paragraph on the white page</label><label><input type="checkbox"/> Type between existing reporting tables</label><label><input type="checkbox"/> Change PM figures and regenerate</label><label><input type="checkbox"/> Manually change a generated value; regenerate again</label><label><input type="checkbox"/> Save, reopen and print A4</label></div></details>
+        <button id="reset" class="reset-btn" type="button">Reset demonstration</button>
+        <p class="privacy-note"><strong>Prototype only.</strong> No Supabase connection. Saving is local to this browser; JSON exports are downloaded to your computer. Do not enter real patient details.</p>
+      </div>
+    </aside>
   </div>
   <script type="module" src="/src/main.js"></script>
 </body>

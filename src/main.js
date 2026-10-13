@@ -16,6 +16,53 @@ let revision = 0;
 let dirty = false;
 let suppressChange = false;
 let editor;
+let pageCount = 1;
+let currentPage = 1;
+
+function updatePages() {
+  el('page-indicator').textContent = `Page ${currentPage} of ${pageCount}`;
+}
+function updateWordCount() {
+  if (!editor) return;
+  try {
+    // The Canvas Editor SDK may compute word counts asynchronously.
+    Promise.resolve(editor.command.getWordCount()).then(value => {
+      const total = typeof value === 'number' ? value : value?.wordCount ?? value?.count;
+      if (Number.isFinite(total)) el('word-count').textContent = `Words: ${total}`;
+    }).catch(() => {});
+  } catch (_) { /* Word count is supplementary; never affect editing. */ }
+}
+function setDataPanel(open) {
+  const panel = el('source-panel');
+  panel.classList.toggle('open', open);
+  panel.setAttribute('aria-hidden', String(!open));
+  el('panel-scrim').hidden = !open;
+  el('open-data').setAttribute('aria-expanded', String(open));
+  if (open) el('close-data').focus();
+  else el('open-data').focus();
+}
+function activateTab(tab) {
+  const tabButton = document.querySelector(`[data-tab="${tab}"]`);
+  if (!tabButton) return;
+  for (const item of document.querySelectorAll('[data-tab]')) {
+    const selected = item === tabButton;
+    item.classList.toggle('active', selected);
+    item.setAttribute('aria-selected', String(selected));
+    item.tabIndex = selected ? 0 : -1;
+  }
+  for (const panel of document.querySelectorAll('[data-panel]')) {
+    panel.hidden = panel.dataset.panel !== tab;
+  }
+}
+function reflectSelection(style) {
+  if (!style || typeof style !== 'object') return;
+  for (const name of ['bold', 'italic', 'underline', 'strike']) {
+    const field = name === 'strike' ? 'strikeout' : name;
+    if (typeof style[field] !== 'boolean') continue;
+    const button = document.querySelector(`.ribbon [data-cmd="${name}"]`);
+    if (button) button.setAttribute('aria-pressed', String(style[field]));
+  }
+}
 
 function status(message, kind = 'normal') {
   el('document-status').textContent = message;
@@ -69,6 +116,7 @@ function applyDraft(draft) {
     revision = draft.revision || 0;
     showSource();
     setDirty(false);
+    updateWordCount();
   } finally { suppressChange = false; }
 }
 function saveFile(name, value) {
@@ -100,6 +148,7 @@ function reconcile() {
   source = nextSource;
   lastGenerated = outcome.generated;
   revision += 1;
+  updateWordCount();
   showSource();
   setDirty(true);
   const count = outcome.preservedOverrides.length;
@@ -110,11 +159,16 @@ function runCommand(name) {
   const c = editor.command;
   const commands = {
     bold: () => c.executeBold(), italic: () => c.executeItalic(), underline: () => c.executeUnderline(),
+    strike: () => c.executeStrikeout(),
     clear: () => c.executeFormat(),
     left: () => c.executeRowFlex('left'), center: () => c.executeRowFlex('center'), right: () => c.executeRowFlex('right'),
     bullets: () => c.executeList('ul'), numbers: () => c.executeList('ol'),
     undo: () => c.executeUndo(), redo: () => c.executeRedo(),
     table: () => c.executeInsertTable(3, 3), pageBreak: () => c.executePageBreak(),
+    tableRow: () => c.executeInsertTableBottomRow(), tableColumn: () => c.executeInsertTableRightCol(),
+    mergeCells: () => c.executeMergeTableCell(), deleteTable: () => c.executeDeleteTable(),
+    zoomIn: () => c.executePageScaleAdd(), zoomOut: () => c.executePageScaleMinus(),
+    zoomReset: () => c.executePageScaleRecovery(),
     a4: () => { c.executePaperSize(794, 1123); c.executeSetPaperMargin([72, 68, 72, 68]); },
     print: () => c.executePrint()
   };
@@ -129,23 +183,57 @@ function initialize() {
     width: 794, height: 1123, margins: [72, 68, 72, 68],
     pageGap: 20, printPixelRatio: 2, pageMode: 'pagination'
   });
-  editor.listener.contentChange = () => { if (!suppressChange) setDirty(true); };
-  editor.listener.pageSizeChange = number => { el('document-status').textContent = `${number} page(s) • A4`; };
+  editor.listener.contentChange = () => {
+    if (!suppressChange) setDirty(true);
+    updateWordCount();
+  };
+  editor.listener.pageSizeChange = number => {
+    pageCount = Math.max(1, Number(number) || 1);
+    currentPage = Math.min(currentPage, pageCount);
+    updatePages();
+  };
+  editor.listener.intersectionPageNoChange = number => {
+    // The SDK exposes zero-based page indices.
+    currentPage = Math.max(1, (Number(number) || 0) + 1);
+    updatePages();
+  };
+  editor.listener.pageScaleChange = number => {
+    const n = Number(number);
+    if (Number.isFinite(n)) el('zoom-label').textContent = `${Math.round(n * 100)}%`;
+  };
+  editor.listener.rangeStyleChange = reflectSelection;
   for (const btn of document.querySelectorAll('[data-cmd]')) {
     btn.addEventListener('click', () => withEditor(() => runCommand(btn.dataset.cmd)));
   }
   for (const tab of document.querySelectorAll('[data-tab]')) {
-    tab.addEventListener('click', () => {
-      for (const item of document.querySelectorAll('[data-tab]')) {
-        const selected = item === tab;
-        item.classList.toggle('active', selected);
-        item.setAttribute('aria-selected', String(selected));
-      }
-      for (const panel of document.querySelectorAll('[data-panel]')) panel.classList.toggle('hidden', panel.dataset.panel !== tab.dataset.tab);
+    tab.addEventListener('click', () => activateTab(tab.dataset.tab));
+    tab.addEventListener('keydown', event => {
+      if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
+      const tabs = [...document.querySelectorAll('[data-tab]')];
+      const index = tabs.indexOf(tab);
+      const next = tabs[(index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length];
+      activateTab(next.dataset.tab);
+      next.focus(); event.preventDefault();
     });
+  }
+  activateTab('home');
+  el('open-data').addEventListener('click', () => setDataPanel(!el('source-panel').classList.contains('open')));
+  el('close-data').addEventListener('click', () => setDataPanel(false));
+  el('view-data').addEventListener('click', () => setDataPanel(!el('source-panel').classList.contains('open')));
+  el('panel-scrim').addEventListener('click', () => setDataPanel(false));
+  el('dismiss-tip').addEventListener('click', () => { el('writing-tip').hidden = true; });
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && el('source-panel').classList.contains('open')) setDataPanel(false);
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
+      event.preventDefault(); withEditor(persist);
+    }
+  });
+  for (const button of document.querySelectorAll('[data-action="save"]')) {
+    button.addEventListener('click', () => withEditor(persist));
   }
   el('font').addEventListener('change', ev => withEditor(() => editor.command.executeFont(ev.target.value)));
   el('font-size').addEventListener('change', ev => withEditor(() => editor.command.executeSize(Number(ev.target.value))));
+  el('font-color').addEventListener('input', ev => withEditor(() => editor.command.executeColor(ev.target.value)));
   el('save').addEventListener('click', () => withEditor(persist));
   el('reopen').addEventListener('click', () => withEditor(() => {
     if (dirty && !confirm('Discard unsaved changes and reopen the last locally saved draft?')) return;
@@ -177,11 +265,13 @@ function initialize() {
     const fresh = buildInitialDocument(source);
     lastGenerated = fresh.generated;
     editor.command.executeSetValue(fresh.document);
-    revision = 0; showSource(); dirty = true;
+    revision = 0; showSource(); updateWordCount(); dirty = true;
     setDirty(true); status('Demonstration reset; nothing saved', 'success');
   }));
   window.addEventListener('beforeunload', ev => { if (dirty) { ev.preventDefault(); ev.returnValue = ''; } });
   showSource();
+  updatePages();
+  updateWordCount();
   setDirty(true);
   // Clear non-critical statuses only via explicit next action; no timer needed.
   status('Ready — click inside the white page to type', 'success');
