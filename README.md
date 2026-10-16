@@ -1,60 +1,45 @@
-# Night Memo — Word-style Manager Document Prototype (v2)
+# Nurse Memo — Canvas Editor document-engine evaluation
 
-Free, open-source, standalone document editor evaluation for the hospital Night Memo concept. Built with [Canvas Editor](https://github.com/Hufe921/canvas-editor) under the MIT licence, with Vite and **synthetic data only**. No Supabase connection or production patient data.
+This is an **isolated experiment**, not a replacement Nurse Memo repository. It does not touch Supabase or authenticate against any user account. The Night Memo structure follows the repository's main admission and infection tables, CT figures, free-text sections and signature. All rows are generated fictitious examples.
 
-## Current UI
+## Installation on your Mac (internet required)
 
-- **Familiar document workspace:** blue title bar, File / Home / Insert / Layout / View ribbon, centred A4 document, bottom page/zoom information.
-- **Free-form document editing:** click the white A4 page, type normal paragraphs before, between, or after the mock ward report tables.
-- **Home:** choose font and size; bold, italic, underline, strikethrough, text colour, lists and alignment; undo/redo.
-- **Insert:** add a 3 × 3 table, page break, row/column to the current table or merge selected cells.
-- **Layout:** reset A4 size and margins, print to the browser's printer/PDF facility.
-- **View:** open the Ward Data panel, zoom in/out, reset zoom.
-- **File:** reopen a locally saved draft, import/export demo JSON, print. Save is also in the top-right and Cmd/Ctrl+S saves the local draft.
-- **Ward Data:** collapsible simulator for mock PM/Night figures and a prototype evaluation checklist. It is hidden during normal typing.
+1. Extract the ZIP.
+2. Open Terminal in the extracted folder.
+3. Run `npm install` (requires Node.js and internet access).
+4. Run `npm run dev`.
+5. Open the local URL printed by Vite, generally `http://127.0.0.1:5173/`.
 
-The editor core and document model are unchanged from v1. It continues to use the same local browser draft key, `night-memo-editor-prototype-v1`, to retain compatibility with saved demo drafts.
+For fixture tests, run `npm run check`. For a production bundle, run `npm run build`.
 
-## GitHub installation
+If you have Python and Playwright installed, launch the site and run `python3 tests/browser-check.py`. It will create `qa-results/stress-desktop.png` and `qa-results/browser-results.json` and checks multi-page output, JSON save/reload, page counts and JavaScript errors. You can also do these tests entirely through the page controls.
 
-If you already have the prototype deployed, use the **replacement ZIP** and follow `WORD_STYLE_V2_INSTALL.md`. Keep your existing `.github/workflows/deploy.yml`, Vite and pinned packages.
+## Real-engine acceptance checks
 
-For a fresh clone with dependencies available:
+- Start with **3+ page stress test** and choose **Count rendered pages**. Expect three or more pages, not a single continuous sheet. Exact count depends on fonts, version and browser.
+- Click a table cell. Use **Add table row** (or the Canvas Editor table context menu). Check that table continues correctly onto the next page. Header rows are marked `pagingRepeat` in the fixture; verify they visibly repeat after each page break.
+- Select some text, apply Bold/Italic/Underline and Undo/Redo. Recheck pagination.
+- Use **Append test paragraph**, then check the page count again. Editing a paragraph near the start of a document is an additional manual test for moving later content.
+- Use **Save JSON** then **Reload saved JSON**, and verify edits are intact.
+- Click **Print / PDF**, choose Save as PDF, and compare the number of paper pages, row boundaries, column widths and headers with the editor. **This is the critical acceptance test: do not adopt the engine if they do not agree.**
+- Optionally open at 390px width: the paper should scroll horizontally inside the workspace without resizing clinical table columns.
 
-```sh
-npm install
-npm run verify
-npm run dev
-```
+## Notes
 
-The existing GitHub Actions workflow runs tests, builds with Vite, and deploys `dist/` to GitHub Pages. In Settings → Pages, Source must be **GitHub Actions** rather than Deploy from a branch.
+- Uses the actual `@hufe921/canvas-editor` package (pinned to `1.0.5`) and native document model. Does not simulate page rendering with CSS cards.
+- A4 landscape is approximately 1123 x 794 CSS pixels at 96dpi. The page options and margins are configurable in `src/main.js`.
+- The normal fixture has 10 wards; the stress fixture has 72 fictional admission-table rows and 38 fictional infection-table rows.
+- The output is JSON, not the existing Jodit HTML document. Adoption would require replacing the Manager memo generation, saving and printing layers.
+- The test deliberately contains no proprietary eHR code or hospital assets.
+- Canvas Editor's print is invoked through its native `executePrint` command; the existing Nurse Memo `print.html` should **not** be used to render this JSON as plain HTML because that would reintroduce page-break differences.
+- Open-source core is MIT licensed. If adopted, keep the license attribution.
 
-## What to test
+## Test status in this environment
 
-1. Click into the white paper and type English and Traditional Chinese text.
-2. Move the cursor between auto-generated table sections and write a free narrative.
-3. Use Home formatting (font, lists, align, undo/redo).
-4. Insert or modify a table; print an A4 page.
-5. Open **Ward Data**, change Ward F10 PM admissions from 3 to 6, and choose **Update generated figures**. The combined admission count should change from 5 to 8. Your hand-written text should remain unchanged.
-6. Manually edit a generated figure and regenerate again. The prototype should preserve that override and report it.
-7. Save and reopen, then export JSON and import it again. Test the page on hospital computers and printers.
+The fixture tests and JS syntax checks run offline. The actual npm editor and Vite build **could not** be run here because the container cannot reach npm/GitHub/CDN hosts. Do not treat native pagination, table repetition, printing or editor interactions as verified until the browser checks above are completed. See `TEST_REPORT.md`.
 
-## Architecture
+Official documentation: https://hufe.club/canvas-editor-docs/en/guide/start.html
 
-- `src/main.js` — document initialization, Word-style ribbon actions, Ward Data panel, print, local draft and file controls.
-- `src/document-model.js` — source-linked table data, validation, conservative regeneration and manual-override preservation.
-- `src/mock-data.js` — synthetic PM/Night numbers.
-- `src/styles.css` — title bar, ribbon, editor workspace, panel and responsive styles.
-- `tests/` — Node-native data-model and interface-contract tests.
+## GitHub Pages alternative (no Mac installation)
 
-## Limitations and safety
-
-This is a prototype, not a clinical information system. It intentionally has no authentication, multi-user collaboration, audit database, secure patient record storage or real Ward submissions. Do not enter real patient information into this public GitHub Pages prototype. The only persistence is local browser storage and downloaded JSON.
-
-Canvas Editor is not Microsoft Word. DOCX import/export is not bundled. The Word-inspired controls are grounded in Canvas Editor's actual APIs, but this prototype does not implement every Word feature.
-
-Regeneration uses the original conservative `executeSetValue` approach. It protects manual text and edited source-linked cells, but can reset the cursor and undo stack. Table editing, multilingual typing, printing and selectable PDF text need real-workstation evaluation before production use.
-
-**Verification:** the tests validate application and UI structure. A live Vite build and a browser visual check must still be completed through GitHub Actions and the deployed prototype because the current build environment has no npm registry access and browser navigation was blocked.
-
-For installation, see `WORD_STYLE_V2_INSTALL.md`.
+This package also includes `.github/workflows/deploy-pages.yml` and `vite.config.js`. Upload all files to your **separate test repository** and select **GitHub Actions** under Settings > Pages. GitHub performs the npm install and static build; you only need a browser on your Mac. See `UPLOAD_TO_GITHUB_PAGES.md` for complete steps.

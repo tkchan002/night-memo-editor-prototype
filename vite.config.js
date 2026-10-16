@@ -1,7 +1,6 @@
 import { defineConfig } from 'vite';
 
-// Relative assets also work at https://<user>.github.io/<repo>/.
+// Relative paths work on GitHub Pages project URLs (/repository-name/).
 export default defineConfig({
   base: './',
-  build: { target: 'es2022', outDir: 'dist' }
 });
