@@ -1,10 +1,8 @@
-name: Deploy Canvas Editor Test to GitHub Pages
+name: Deploy Nurse Memo Document Test
 
 on:
   push:
-    branches:
-      - main
-      - master
+    branches: [main, master]
   workflow_dispatch:
 
 permissions:
@@ -13,39 +11,38 @@ permissions:
   id-token: write
 
 concurrency:
-  group: "canvas-editor-pages"
-  cancel-in-progress: true
+  group: github-pages
+  cancel-in-progress: false
 
 jobs:
-  build:
+  validate:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out repository
+      - name: Checkout source
         uses: actions/checkout@v4
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - name: Install dependencies
-        run: npm install --no-audit --no-fund
-      - name: Check sample document data
-        run: npm run check
-      - name: Build static site
-        run: npm run build
-      - name: Configure Pages
-        uses: actions/configure-pages@v5
-      - name: Upload built site
-        uses: actions/upload-pages-artifact@v4
-        with:
-          path: dist
+      - name: Verify HTML, JavaScript and DOCX fixtures
+        run: |
+          node --check assets/app.js
+          python3 tests/check_project.py
 
   deploy:
+    needs: validate
+    runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
-    needs: build
     steps:
-      - name: Publish Pages site
-        id: deployment
+      - uses: actions/checkout@v4
+      - name: Prepare static website
+        run: |
+          mkdir -p _site/assets _site/fixtures
+          cp index.html _site/
+          cp assets/app.js assets/style.css _site/assets/
+          cp fixtures/*.docx _site/fixtures/
+          touch _site/.nojekyll
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
         uses: actions/deploy-pages@v4

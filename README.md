@@ -1,62 +1,60 @@
-# Nurse Memo — Canvas Editor print comparison (test repository v2)
+# Nurse Memo — ranuts/document Word processor evaluation
 
-This is a **standalone experiment**, not the live Nurse Memo application. It uses fictional Night Memo data; it never contacts Supabase and never accesses patient records.
+This is a **standalone test repository**, not a patch for Nurse Memo.
 
-## Purpose
+The page hosts an iframe of the [ranuts/document editor](https://github.com/ranuts/document) at `https://edit.chaxus.com/editor?embed=1` and uses its [documented embed API](https://edit.chaxus.com/help/embed-api). **It does not contain or self-host the ONLYOFFICE engine.** The editor service must remain available, and browser security/privacy settings must allow its iframe. This is intentionally a small, no-install, no-npm test. Your GitHub Pages repository hosts only the sample DOCX files and the control page.
 
-The first Canvas Editor evaluation produced a **10-page image-based PDF**, although the editor itself numbered **7 pages**. This repository compares the old native print function against two alternative exports. The test is intentionally repeatable with the same 10-ward and 72-row fixtures.
+All fixtures contain fictional patient-free data. **Never upload clinical, identifiable, confidential or protected records to this public test site.** The page has no Supabase connection and no account login.
 
-| Route | Button | How the document is exported | Expected result / limitation |
-|---|---|---|---|
-| A | Native print (old) | Canvas Editor `executePrint()` | Baseline. May double-paginate. Record the physical page count manually. Image-based output likely. |
-| B | Page-locked image PDF | Canvas Editor `getImage()` + jsPDF; exactly one image per A4 landscape page | Page count is **forced** to equal the editor page count. Text **cannot be selected**, because each PDF page is a raster image. |
-| C | Vector text PDF | `canvas-editor-pdf` 0.7.0 `DrawPdf` renders editor's structured document as PDF instructions | Designed to preserve selectable text. **Neither page count nor line/table positioning is guaranteed** until inspected. |
+## Install on your existing GitHub testing repository
 
-This does **not** implement the final Night Memo editor. It validates a printing decision before integration.
+1. Download and extract the ZIP on your MacBook.
+2. On GitHub, open your *testing* repository, not `nursememo`.
+3. In **Settings → Pages**, set **Source: GitHub Actions**.
+4. Upload the **contents** of the extracted folder into the repository root (`index.html`, `assets/`, `fixtures/`, `.github/`, `tests/`). On macOS, `Command + Shift + .` shows hidden folders including `.github`.
+5. Commit. Check **Actions → Deploy Nurse Memo Document Test**. Wait for green success.
+6. Open `https://YOURNAME.github.io/YOUR-TEST-REPO/` (the exact URL appears under Settings → Pages).
 
-## Install on GitHub Pages (no installation on your Mac)
+### If upgrading from our Canvas Editor test
 
-1. Download and extract the test ZIP in Finder.
-2. Open your **separate testing repository** in GitHub. Remove or replace any old files in that test repository that conflict with this project. Do not upload to the working Nurse Memo repository.
-3. Upload **the contents** of the extracted folder to the testing repository's root. Ensure `.github/workflows/deploy-pages.yml` is included. Finder can show hidden items via **Command + Shift + .**
-4. Open GitHub **Settings → Pages → Build and deployment → Source: GitHub Actions**.
-5. Open **Actions**, wait for **Deploy Canvas Editor Test to GitHub Pages** to pass, then open the GitHub Pages URL.
-6. If the workflow fails, open the failing job and provide the log. The build installs Canvas Editor, `canvas-editor-pdf`, jsPDF and Vite on GitHub's machine, **not your Mac**.
+The included `.github/workflows/deploy-pages.yml` is deliberately the same workflow path as the previous project, so it replaces the old deployment workflow. **The previous Vite `src/`, `package.json`, `vite.config.js`, `public/` and old Canvas Editor tests can be deleted**; they are no longer used. The new workflow publishes **only** `index.html`, `assets/` and `fixtures/` into `_site`, so leftover Canvas files won't appear on the deployed website. You do not need to run commands on your Mac.
 
-## Test steps — do these without modifying the document between exports
+## Test workflow
 
-1. Click **Stress test (72 rows)**. Click **Count editor pages** and record the number in the first card.
-2. Click **Native print (old)**. In Chrome choose **Save as PDF**. Record the actual physical PDF page count in the **Enter PDF count** field.
-3. Click **Page-locked image PDF**. A download named `night-memo-page-locked-images.pdf` should appear. Its page count should match the editor. This is a control, not a final solution.
-4. Click **Vector text PDF**. A download named `night-memo-vector-text.pdf` should appear. Record the count shown in the Vector card.
-5. Open the vector PDF in Chrome. Try selecting a ward name or searching for **Infectious Case** using Command + F. A searchable, selectable PDF would be preferable.
-6. Compare page boundaries. Check whether the admission and infection table headers repeat on continued pages, whether any row is cut in half, and whether any column content is clipped or oddly wrapped.
-7. Repeat steps 1–6 for **Normal 10 wards**. Test selecting a table cell, adding a row and counting pages again. Save JSON and Reload JSON to verify editing round-trip.
+1. When the external editor signals `document:ready`, the host automatically opens `night-memo-normal-10.docx`.
+2. Confirm **landscape A4** paper, editable table cells, legible headers and consistent paginated sheets.
+3. Change some text and add a row; observe page reflow.
+4. Click **Save edited DOCX**. Reopen the downloaded file with **Open local DOCX** and check preservation of edits.
+5. Click **Export PDF (API test)**. It requests `{ type:'document:save', payload:{targetExt:'PDF'}}`. If the deployed upstream editor does not support this conversion via embedding, the event log will show its error. **Alternative:** use its built-in File / Download / PDF or Export PDF functionality.
+6. Click **Stress test · 72 + 38 rows**. Compare repeated table headings, rows at page breaks, and PDF page count against the live editor.
+7. Verify PDF text selection in Chrome Preview, and upload the exported PDFs for comparison.
 
-**Important:** Different printers, browser print scaling, or paper settings can introduce additional page changes. Use Chrome A4 landscape, 100% scale and no additional margins for the native print baseline. The two direct PDF downloads bypass Chrome's print dialog.
+The parent page never considers a save successful until the editor sends a response with a real DOCX ZIP or `%PDF-` file signature. Errors are displayed in the event log. If the editor doesn't send a `document:ready` event within 35 seconds, the page displays a link to the standalone editor.
 
-### Optional embedded-font test
+## Fallback if the iframe is blocked
 
-The **Load embedded fonts** checkbox affects **only the vector PDF**. The exporter may fetch font files from a public CDN, which can be slow or blocked on some networks. The default vector export leaves this unchecked to permit a simpler offline-font-path evaluation. Its appearance may differ from Canvas Editor's Arial rendering. If the page count or text looks wrong, repeat with the checkbox and compare both outputs.
+1. Download the [normal DOCX](fixtures/night-memo-normal-10.docx) or [stress DOCX](fixtures/night-memo-stress-72-38.docx) from the test page.
+2. Open <https://edit.chaxus.com/editor> in another tab.
+3. Open the downloaded `.docx` using the editor's file picker.
+4. Edit/export and send the PDF and screenshots back for assessment.
 
-## What to send back
+This fallback still tests the actual Word processing engine, but does **not** test the embedding protocol.
 
-- Screenshot showing the four page-count cards after you complete the stress test.
-- Both downloaded PDFs: **page-locked image PDF** and **vector text PDF**.
-- Whether text in the vector PDF can be selected / searched.
-- A note about any mismatch in rows, repeated headings or document margins.
+## Licence and deployment notes
 
-Do **not** send any real patient data. The sample report uses invented ward statistics.
+* The external editor is by ranuts and incorporates ONLYOFFICE technology. See its [AGPL-3.0 licence and NOTICE](https://github.com/ranuts/document/blob/main/NOTICE). This test **does not** distribute the editor's source or compiled files.
+* Do not strip licensing, attribution or branding from any future self-hosted editor deployment.
+* No external credentials, tokens or API keys are used by the test host.
+* GitHub Actions only validates and publishes static files. It does not download/build the editor.
+* This test is dependent on upstream availability and behaviour, and has not been tested live in this build environment. The included structural checks do not prove editing, pagination, or PDF fidelity.
 
-## Dependencies / licences
+## Verification
 
-- `@hufe921/canvas-editor` 1.0.5 — MIT.
-- `canvas-editor-pdf` 0.7.0 — MIT; independent community project, not an official Canvas Editor extension.
-- `jspdf` 4.2.1 — MIT.
-- Vite 7.x — MIT.
+GitHub Actions runs:
 
-Package code comes from npm during the GitHub Actions build. This ZIP contains no vendor source, bundled proprietary UI assets or font files.
+```sh
+node --check assets/app.js
+python3 tests/check_project.py
+```
 
-## Verification status
-
-The static fixture, page geometry, page-count comparison and script syntax checks pass locally. **A complete npm build and actual Canvas Editor / PDF exporter browser interaction have not been performed in this environment** because external npm registry access is unavailable. The GitHub Actions build is the first integration check; your exported PDFs are the conclusive fidelity check.
+The two DOCX fixtures have been independently rendered and visually inspected in a document renderer; those checks validate the test data, **not** ranuts/document functionality. Results and known gaps are in `TEST_REPORT.md`.
