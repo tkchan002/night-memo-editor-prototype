@@ -2,36 +2,54 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Nurse Memo | Canvas Editor evaluation</title>
+<title>Nurse Memo | Canvas Editor print comparison</title>
 <style>
-*{box-sizing:border-box}body{margin:0;background:#e4e5e7;color:#202020;font:14px Arial, sans-serif}
-header{position:sticky;top:0;z-index:10;background:linear-gradient(#f7f7f6,#e0e0de);border-bottom:1px solid #b0b0b0;padding:10px 18px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
-header strong{font-size:18px}header small{display:block;color:#646464;margin-top:3px}
-.menu{display:flex;align-items:center;gap:5px;flex-wrap:wrap;padding:8px 15px;background:#efefec;border-bottom:1px solid #b1b1b1;position:sticky;top:62px;z-index:9}
-button,select{font:13px Arial,sans-serif;background:linear-gradient(#fff,#d7d7d7);border:1px solid #929292;border-radius:14px;padding:5px 12px;color:#1b1b1b;cursor:pointer}button:hover{background:linear-gradient(#fff,#c6ecfa)}button:focus-visible,select:focus-visible{outline:2px solid #266fb9}button:disabled{opacity:.5;cursor:default}
-.group{width:1px;height:21px;background:#aaa;margin:0 4px}
-#notice{font-size:12px;color:#444;padding:8px 16px;background:#fffcea;border-bottom:1px solid #d7cc92}#notice[data-state="error"]{color:#8b1414;background:#ffeded}
-#workspace{padding:22px 12px 60px;max-width:1300px;margin:auto;overflow-x:auto}#canvas-editor{min-height:900px;min-width:1080px}
-#stats{font:13px Arial;background:#f8f8f7;padding:8px 16px;border-top:1px solid #bababa;position:sticky;bottom:0}
-@media(max-width:640px){header{padding:9px 10px}.menu{position:relative;top:auto;padding:8px}#workspace{padding:8px 2px}button,select{padding:7px 11px}}
+*{box-sizing:border-box}body{margin:0;background:#e4e5e7;color:#202020;font:14px Arial,sans-serif}
+header{background:linear-gradient(#f7f7f6,#e0e0de);border-bottom:1px solid #b0b0b0;padding:11px 18px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+header strong{font-size:18px}header small{display:block;color:#646464;margin-top:4px}
+.menu{display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding:10px 15px;background:#efefec;border-bottom:1px solid #b1b1b1}
+button{font:13px Arial,sans-serif;background:linear-gradient(#fff,#d7d7d7);border:1px solid #929292;border-radius:14px;padding:6px 12px;color:#1b1b1b;cursor:pointer}button:hover{background:linear-gradient(#fff,#c6ecfa)}button:focus-visible{outline:2px solid #266fb9}button:disabled{opacity:.5;cursor:wait}
+.group{width:1px;height:23px;background:#aaa;margin:0 3px}
+#notice{font-size:13px;color:#333;padding:10px 16px;background:#fffcea;border-bottom:1px solid #d7cc92;min-height:39px}#notice[data-state="error"],#comparison[data-state="error"]{color:#921717;background:#ffeded}
+#workspace{padding:16px 12px 50px;max-width:1390px;margin:auto;overflow-x:auto}#canvas-editor{min-height:900px;min-width:1100px}
+.instructions{padding:11px 16px;border-top:1px solid #bbb;background:#f9f9f7;font-size:13px;line-height:1.55}
+.scores{display:flex;align-items:stretch;gap:10px;flex-wrap:wrap;padding:10px 16px;background:#fafaf8;border-bottom:1px solid #bbb}
+.score{min-width:155px;border:1px solid #d1d1d1;background:white;padding:10px;border-radius:4px}
+.score strong{font-size:24px;font-variant-numeric:tabular-nums;display:block;margin-top:4px}
+#comparison{flex:1;min-width:210px;border:1px solid #dedede;background:#f7f7f7;padding:10px;border-radius:4px}
+.menu-label{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#555;font-weight:700}
+label{display:inline-flex;gap:6px;align-items:center;font-size:13px}
+@media(max-width:640px){header{padding:9px 10px}.menu{padding:8px}#workspace{padding:8px 2px}button{padding:7px 11px}}
 </style>
 </head>
 <body>
-<header><div><strong>Nurse Memo — Document Engine Evaluation</strong><small>Standalone test · A4 landscape · Fictional data only · Not connected to Supabase</small></div><div>Canvas Editor 1.0.5</div></header>
-<div class="menu" id="test-toolbar" aria-label="Editor tools">
-  <button data-fixture="normal" title="Load 10-ward report">Normal memo</button>
-  <button data-fixture="stress" title="Load many rows to force page breaks">3+ page stress test</button>
-  <span class="group"></span>
-  <button data-command="executeUndo">Undo</button><button data-command="executeRedo">Redo</button>
-  <button data-command="executeBold"><b>B</b></button><button data-command="executeItalic"><i>I</i></button><button data-command="executeUnderline"><u>U</u></button>
-  <button data-command="executeInsertTableBottomRow" title="Select a table cell first">Add table row</button>
-  <span class="group"></span>
-  <button id="page-check">Count rendered pages</button><button id="add-paragraph">Append test paragraph</button>
-  <button id="save">Save JSON</button><button id="restore">Reload saved JSON</button><button id="print">Print / PDF</button>
-</div>
+<header><div><strong>Nurse Memo — Canvas Editor Print Comparison</strong><small>Standalone evaluation · A4 landscape · Fictional data · No Supabase</small></div><small>Test v2 · Canvas Editor 1.0.5 + canvas-editor-pdf 0.7.0</small></header>
+<nav class="menu" aria-label="Editor operations">
+ <span class="menu-label">Document</span>
+ <button data-fixture="normal">Normal 10 wards</button><button data-fixture="stress">Stress test (72 rows)</button>
+ <span class="group"></span><button data-command="executeUndo">Undo</button><button data-command="executeRedo">Redo</button>
+ <button data-command="executeBold"><b>B</b></button><button data-command="executeItalic"><i>I</i></button><button data-command="executeUnderline"><u>U</u></button>
+ <button data-command="executeInsertTableBottomRow" title="Select a cell first">Add table row</button>
+ <button id="add-paragraph">Append paragraph</button><button id="save">Save JSON</button><button id="restore">Reload JSON</button>
+</nav>
+<nav class="menu" aria-label="PDF print comparison operations">
+ <span class="menu-label">Printing tests</span>
+ <button id="page-check">1. Count editor pages</button>
+ <button id="native-print">2. Native print (old)</button>
+ <button id="page-locked-export">3. Page-locked image PDF</button>
+ <button id="vector-export">4. Vector text PDF</button>
+ <label title="May require fetching fonts from a third-party CDN"><input type="checkbox" id="embed-fonts"> Load embedded fonts (optional, CDN)</label>
+</nav>
 <div id="notice">Loading the real Canvas Editor library…</div>
+<section class="scores" aria-label="Pagination measurements">
+ <div class="score">Editor pages<strong id="count-editor">—</strong></div>
+ <div class="score">Page-locked PDF pages<strong id="count-locked">—</strong></div>
+ <div class="score">Native PDF pages<strong id="count-native">—</strong><label style="display:block;margin-top:4px;">Enter PDF count: <input id="native-pages" type="number" min="1" max="999" style="width:70px;" placeholder="e.g. 10"></label></div>
+ <div class="score">Vector PDF pages<strong id="count-vector">—</strong></div>
+ <div id="comparison">Export a vector PDF to compare counts. Native print page count must be checked manually in Chrome.</div>
+</section>
 <main id="workspace"><div id="canvas-editor"></div></main>
-<div id="stats">Run “3+ page stress test”, then check page count, table continuation, save/reopen and print output. This is a separate evaluation, not the live Nurse Memo editor.</div>
+<footer class="instructions"><strong>Comparison goal:</strong> Test each export on the <em>same unchanged document</em>. Page-locked PDF deliberately contains one rasterised page image per editor page, so it should match page count but has non-selectable text. The vector PDF should be checked for page count, actual page-break positions, table headers and text selection. Native print is retained only as the known-problem baseline. No printer settings or file changes are performed automatically.</footer>
 <script type="module" src="/src/main.js"></script>
 </body>
 </html>

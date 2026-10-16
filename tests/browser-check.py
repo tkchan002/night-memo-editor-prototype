@@ -23,16 +23,16 @@ async def run(url='http://127.0.0.1:5173/'):
         # Restore multi-page fixture using public programmatic hook.
         await page.evaluate('window.__NurseMemoCanvasProbe.reset(true)')
         await page.wait_for_timeout(250)
-        await page.get_by_role('button',name='Append test paragraph').click()
+        await page.get_by_role('button',name='Append paragraph').click()
         after=await page.evaluate('window.__NurseMemoCanvasProbe.pageCount()')
         saved=await page.evaluate('window.__NurseMemoCanvasProbe.save()')
         await page.get_by_role('button',name='Save JSON').click()
-        await page.get_by_role('button',name='Reload saved JSON').click()
+        await page.get_by_role('button',name='Reload JSON').click()
         restored=await page.evaluate('window.__NurseMemoCanvasProbe.save()')
         result={
           'engine_loaded':True,'stress_pages':initial,'normal_pages':normal,
           'after_append_pages':after,'table_data':data,
-          'roundtrip_contains_appended_text': 'Live reflow test paragraph 1' in json.dumps(restored.get('data',{})),
+          'roundtrip_contains_appended_text': 'Reflow test 1' in json.dumps(restored.get('data',{})),
           'page_errors':errors,
           'stress_at_least_three_pages':initial >= 3,
         }

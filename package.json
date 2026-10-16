@@ -1,13 +1,19 @@
 {
-  "name":"nurse-memo-canvas-editor-evaluation",
-  "private":true,
-  "type":"module",
-  "version":"0.1.0",
-  "scripts":{
-    "dev":"vite --host 127.0.0.1",
-    "build":"vite build",
-    "check":"node --test tests/*.test.mjs"
+  "name": "nurse-memo-canvas-editor-print-comparison",
+  "private": true,
+  "type": "module",
+  "version": "0.2.0",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "check": "node --test tests/*.test.mjs"
   },
-  "dependencies":{"@hufe921/canvas-editor":"1.0.5"},
-  "devDependencies":{"vite":"^7.1.0"}
+  "dependencies": {
+    "@hufe921/canvas-editor": "1.0.5",
+    "canvas-editor-pdf": "0.7.0",
+    "jspdf": "4.2.1"
+  },
+  "devDependencies": {
+    "vite": "^7.1.0"
+  }
 }

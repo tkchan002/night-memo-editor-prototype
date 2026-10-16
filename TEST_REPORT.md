@@ -1,19 +1,39 @@
-# Canvas Editor evaluation — Test report (initial)
+# Print comparison test report — pre-deployment
 
-Baseline: standalone proof of concept derived from the clinical table structure of Nurse Memo's latest landscape Jodit repository. No real report records used.
+## Observed failure in the first test PDF (user-supplied)
 
-| Check | Result | Evidence / next step |
-|---|---|---|
-| Current package/docs researched | Confirmed | Official README and command/option/schema docs |
-| 13-column admission table fixture | Static check | 72 stress rows / 10 normal rows; nested header rows with rowspan and colspan |
-| 9-column infection table fixture | Static check | 38 stress rows / 10 normal rows |
-| Fixture JSON round-trip | Static check | `npm run check` |
-| Actual Canvas Editor 1.0.5 starts in Chromium | **Unverified** | Requires fetching npm library |
-| Live 3+ page reflow | **Unverified** | Run locally with real engine |
-| Cross-page table edits | **Unverified** | Test table row insertion across breaks |
-| Repeated table header rows | **Unverified** | Visually inspect multi-page output |
-| Save / reload via editor command | **Unverified** | Browser check script included |
-| Print / PDF page fidelity | **Unverified** | Compare native printed PDF to editor page images |
-| GitHub Pages integration | **Unverified** | Package is Vite compatible in principle; deployment not tested |
+- Input document: `Nurse Memo _ Canvas Editor evaluation.pdf`.
+- PDF physically contains **10 A4 landscape pages**, each about 842 × 595 points.
+- Rendered page-number labels in the document run from **Page 1 of 7** to **Page 7 of 7**.
+- Page 2 of the physical PDF contains the internal `Page 1 of 7` footer and the start of the next editor page. Hence the printed file was paginated again after Canvas Editor had already laid out seven pages.
+- Inspecting the PDF found page images but **zero extracted text words** on each physical page; the uploaded PDF was image-based.
+- In the stress sample, several long table headers and ward identifiers wrap awkwardly; that issue is separate from the page-count mismatch.
 
-**Decision so far:** Do not replace Jodit in the production/demo Nurse Memo until the real-engine checks pass. The library's documentation shows a plausible technical path, but its table pagination and print equivalence are high-risk, version-specific behaviours.
+## Hypotheses tested by this version
+
+1. `executePrint()` may double-paginate page images in browser print layout.
+2. Taking the exact images returned by `getImage()` and placing **one image per physical PDF page** should eliminate extra page splitting, but stays image-based.
+3. A structured-data vector renderer may provide selectable text and a closer one-to-one page model; accuracy, font metrics and table splitting still need actual PDF comparison.
+
+## Three independent paths
+
+- **Native**: existing `executePrint()` left unchanged so the failure can be reproduced.
+- **Page-locked**: jsPDF creates `N` physical A4 landscape pages for `N` `getImage()` results. Geometry is aspect-ratio preserved. This is a control, not a text-quality improvement.
+- **Vector**: the independent `canvas-editor-pdf` package consumes `editor.command.getValue()` and generates a PDF with drawing and text commands. The reported jsPDF page count is compared to the editor `getImage()` page count. The page may differ because the PDF renderer has separate font measurement and layout logic.
+
+## Current checks
+
+- Fixture shape: 3 tables; normal 10 admission/10 infection rows; stress 72 admission/38 infection rows.
+- PDF page-fit code preserves image aspect ratio within 297 × 210 mm.
+- The code detects 7 vs 10 as a mismatch.
+- Invalid/empty page data fails with an explanatory error.
+- JavaScript sources pass syntax checks.
+
+## Not yet verified
+
+- GitHub Actions npm install/build with `canvas-editor-pdf@0.7.0` and `jspdf@4.2.1`.
+- Actual exported page counts for native, page-locked and vector routes.
+- Table splitting, font selection and text searchability of the vector route.
+- Browser performance with the multi-page stress fixture.
+
+An editor replacement decision should remain **pending** until those checks pass.
