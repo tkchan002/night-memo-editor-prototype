@@ -12,9 +12,12 @@
  */
 import { existsSync, promises as fs } from 'node:fs';
 import { basename, dirname, extname, join, relative, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { brotliDecompressSync, gzipSync, gunzipSync } from 'node:zlib';
 
+const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const source = resolve(process.argv[2] || '.work/ranuts/dist');
+const ranutsCheckout = resolve(process.env.RANUTS_SOURCE_ROOT || dirname(source));
 const destination = resolve(process.argv[3] || 'dist', 'office');
 const repository = (process.env.GITHUB_REPOSITORY || '').split('/')[1] || '';
 const explicitBase = process.env.PAGES_BASE_PATH?.trim();
@@ -28,12 +31,51 @@ const officeBase = `${siteBase}office/`;
 if (source === destination || destination.startsWith(`${source}/`)) {
   throw new Error('Upstream distribution and deployment destination must not overlap.');
 }
-for (const item of ['index.html','editor.html','history.html','sdkjs','web-apps','assets','LICENSE','NOTICE']) {
+for (const item of ['index.html','editor.html','history.html','sdkjs','web-apps','assets']) {
   if (!existsSync(join(source, item))) throw new Error(`Upstream build lacks ${item}: ${source}`);
 }
 
 await fs.rm(destination, { recursive: true, force: true });
 await fs.cp(source, destination, { recursive: true });
+// Vite normally omits LICENSE and NOTICE from dist/. These are source-tree
+// documents, not generated frontend assets. Preserve them in the published
+// editor; do NOT fabricate an empty NOTICE merely to satisfy a file check.
+const legalDirectory = join(repoRoot, 'LICENSES');
+async function publishLegalDocument(name, candidates) {
+  const original = candidates.find(file => existsSync(file));
+  if (!original) {
+    throw new Error(`Required ${name} not found. Looked in: ${candidates.join(', ')}. ` +
+      `Cannot publish an editor without its legal notices.`);
+  }
+  await fs.copyFile(original, join(destination, name));
+  console.log(`Preserved ${name} from ${original}`);
+}
+await publishLegalDocument('LICENSE', [
+  join(ranutsCheckout, 'LICENSE'),
+  join(source, 'LICENSE'),
+  join(legalDirectory, 'ranuts-document-LICENSE'),
+]);
+await publishLegalDocument('NOTICE', [
+  join(ranutsCheckout, 'NOTICE'),
+  join(source, 'NOTICE'),
+]);
+// Retain the third-party notices included with the proof-of-concept source.
+// The original Ranuts NOTICE describes its pre-transplant engine version;
+// the supplementary notice explains the Euro-Office replacement.
+if (!existsSync(join(legalDirectory, 'euro-office-LICENSE.txt')) ||
+    !existsSync(join(legalDirectory, 'euro-office-3rd-Party.txt'))) {
+  throw new Error(`Proof-of-concept third-party license materials missing: ${legalDirectory}`);
+}
+await fs.cp(legalDirectory, join(destination, 'LICENSES'), { recursive: true });
+await fs.writeFile(join(destination, 'PROTOTYPE-NOTICES.txt'),
+  `This experimental browser editor is based on Ranuts/document commit ` +
+  `1301bb8bdac9092c4eb88a6f2f4ff5080cec68bd and incorporates editor ` +
+  `components from Euro-Office DocumentServer v9.3.5-rc.1, with the ` +
+  `@kreijstal/eurooffice 9.3.5-rc.1.build.1 browser integration.\n` +
+  `The preserved Ranuts NOTICE records the original Ranuts distribution and ` +
+  `does not alone describe the Euro-Office engine transplant.\n` +
+  `See LICENSE, NOTICE, and LICENSES/ for upstream and third-party license ` +
+  `information. This is not a production-approved distribution.\n`);
 // Word-only prototype: avoid uploading unrelated editor engines to Pages.
 // Keep the shared API, converters, font assets, and all Word resources intact.
 for (const rel of [

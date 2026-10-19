@@ -13,6 +13,9 @@ for (const name of [
   'office/web-apps/apps/documenteditor/main/app.js',
   'office/web-apps/apps/api/documents/api.js',
   'office/fonts', 'office/eurooffice-poc-build.json',
+  'office/LICENSE', 'office/NOTICE', 'office/PROTOTYPE-NOTICES.txt',
+  'office/LICENSES/euro-office-LICENSE.txt',
+  'office/LICENSES/euro-office-3rd-Party.txt',
 ]) check(existsSync(join(root,name)),`Deployment missing: ${name}`);
 const wasm=readFileSync(join(office,'sdkjs/common/wasm/x2t/x2t.wasm'));
 check(wasm.subarray(0,4).toString('hex')==='0061736d','Invalid WASM binary');

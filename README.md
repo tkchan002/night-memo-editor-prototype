@@ -21,6 +21,7 @@ This repo contains **only scripts and a local-document test page**, not the 591 
 - Extracts only `sdkjs`, `web-apps`, and `dictionaries`; uses the documented publisher transplant script and patches supplied with the uploaded `@kreijstal/eurooffice` package.
 - Gets the pinned converter package `@kreijstal/eurooffice-sdkjs-common@9.3.5-rc.1.build.1`. The two converter files have **hardcoded SHA-256 integrity checks** from your supplied npm archive. It does not use placeholder WASM files.
 - Builds Ranuts with a frozen pnpm lockfile; retains its browser-only Offline controller and iframe bridge.
+- Copies the pinned Ranuts source-tree `LICENSE` and `NOTICE` into the static editor (Vite does not place these in `dist`), alongside the Euro-Office and font third-party notices.
 - Packages the Word-only output under `/nurse-memo-eurooffice-poc/office/`, with static path corrections, a raw `.wasm` fallback and a compressed gzip streaming loader (GitHub Pages cannot set `Content-Encoding: br` for `.wasm.br`). Removes unrelated spreadsheet and presentation engines.
 - Verifies existence of the browser bridge, DOCX engine, WASM, font files and the static site before deploying with GitHub Pages.
 
@@ -42,6 +43,8 @@ Report the **first failed step** and its actual error, not only the last `Proces
 | SHA256 mismatch | The downloaded converter is different from the inspected archive. Do **not** disable the check. |
 | `git apply --check` | The pinned upstream source no longer matches the publisher's patch. |
 | `eurooffice-into-ranuts.py` | The source of the Offline controller or a target engine asset changed. No generic text replacement is attempted. |
+| `Required NOTICE not found` | The pinned Ranuts checkout unexpectedly has no `NOTICE`; packaging deliberately stops rather than deploy without the attribution text. |
+| `Upstream build lacks LICENSE` | Indicates an older version of `scripts/package-site.mjs`; replace it with the corrected file. `LICENSE` is not a required Vite build output. |
 | `x2t` loader patch | Browser WASM loader did not match the known structure, so packaging refused to produce a broken editor. |
 | Site over 900 MiB | The Word-only static output exceeded the conservative Pages size guard. No incomplete site is deployed. |
 | Editor loads but export fails | A **runtime incompatibility**, requiring browser debugging and potentially a newer or corrected offline bridge. A green Actions tick alone is not proof of compatibility. |

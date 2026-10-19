@@ -33,3 +33,12 @@ test('Pages packaging guards nested ONLYOFFICE editor paths and gzip stream',()=
  for(const value of ['assetRoots','index.html','new DecompressionStream(\'gzip\')','x2t.wasm.gz','web-apps/apps/documenteditor/main/index.html','900*1024*1024'])
   assert.ok(pkg.includes(value),`Missing deployment guard: ${value}`);
 });
+
+
+test('legal notices are staged from source checkout rather than required in Vite dist',()=>{
+ const packaging=read('scripts/package-site.mjs');
+ assert.match(packaging,/publishLegalDocument\('LICENSE'/);
+ assert.match(packaging,/publishLegalDocument\('NOTICE'/);
+ assert.match(packaging,/ranutsCheckout/);
+ assert.doesNotMatch(packaging,/\['index\.html','editor\.html','history\.html','sdkjs','web-apps','assets','LICENSE'/);
+});
