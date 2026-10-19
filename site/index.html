@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EuroOffice / Ranuts — Browser-only test</title>
+<link rel="stylesheet" href="./poc.css">
+<script type="module" src="./poc.js"></script>
+</head>
+<body>
+<header class="top"><div><h1>EuroOffice × Ranuts</h1><p>Browser-only Word editor proof of concept</p></div><span class="tag">Experimental • not for clinical data</span></header>
+<main class="layout">
+  <section class="controls" aria-label="Editor test controls">
+    <h2>1. Choose a fictional DOCX</h2>
+    <p>Files stay in this browser. Do not use real patient information.</p>
+    <input id="file" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
+    <button id="open" disabled>Open in editor</button>
+    <h2>2. Test exports</h2>
+    <div class="button-grid"><button id="docx" disabled>Export DOCX</button><button id="pdf" disabled>Export PDF</button></div>
+    <p>Each export is checked for basic file signatures and then downloaded.</p>
+    <h2>3. Test permissions</h2>
+    <div class="button-grid"><button id="readOnly" disabled>Set read-only</button><button id="editable" disabled>Set editable</button></div>
+    <button id="state" disabled>Request editor state</button>
+    <h2>Diagnostic events</h2>
+    <div class="status"><span class="dot" id="dot"></span><output id="status">Waiting for editor</output></div>
+    <pre id="log" aria-live="polite"></pre>
+    <button id="copyLog">Copy diagnostic log</button>
+    <p class="footnote">A successful page load is not proof that DOCX/PDF export or document formatting is correct. Compare exports with your current Nurse Memo editor.</p>
+  </section>
+  <section class="editorPane" aria-label="EuroOffice document editor">
+    <div class="editorHeader"><strong>Editor</strong><span id="docName">No document opened</span></div>
+    <iframe id="editor" title="EuroOffice test document editor" allow="clipboard-read; clipboard-write"></iframe>
+  </section>
+</main>
+</body></html>

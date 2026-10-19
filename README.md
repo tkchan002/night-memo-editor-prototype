@@ -1,60 +1,69 @@
-# Nurse Memo — ranuts/document Word processor evaluation
+# EuroOffice + Ranuts — browser-only proof of concept
 
-This is a **standalone test repository**, not a patch for Nurse Memo.
+**Experimental build; not an approved replacement for Nurse Memo. Do not upload or test real patient information.**
 
-The page hosts an iframe of the [ranuts/document editor](https://github.com/ranuts/document) at `https://edit.chaxus.com/editor?embed=1` and uses its [documented embed API](https://edit.chaxus.com/help/embed-api). **It does not contain or self-host the ONLYOFFICE engine.** The editor service must remain available, and browser security/privacy settings must allow its iframe. This is intentionally a small, no-install, no-npm test. Your GitHub Pages repository hosts only the sample DOCX files and the control page.
+This repo contains **only scripts and a local-document test page**, not the 591 MB Euro-Office Debian package or the compiled Office applications. A GitHub Actions Ubuntu runner downloads the official pinned release, checks out the Ranuts source at the exact commit used by the third-party package publisher, and builds an independent, browser-only Word editor. It does **not** deploy any Supabase data, API keys, or Nurse Memo application code.
 
-All fixtures contain fictional patient-free data. **Never upload clinical, identifiable, confidential or protected records to this public test site.** The page has no Supabase connection and no account login.
+## Steps — entirely through the GitHub website
 
-## Install on your existing GitHub testing repository
+1. Extract `NurseMemo_EuroOffice_POC_GitHub_Ready.zip` on your computer. Do **not** upload the ZIP as a single file to the repository; GitHub does not automatically expand it.
+2. Visit <https://github.com/new> and create a repository named `nurse-memo-eurooffice-poc` with a `main` default branch. For an experimental public Pages site, use **fictional documents only**. If you choose private, Pages availability depends on your GitHub plan.
+3. In an empty new repository, click **uploading an existing file** (or **Add file → Upload files** if the repository is already initialized), and upload the **contents** of the extracted folder. Include the hidden `.github/workflows/eurooffice-poc.yml` directory; on macOS Finder, press **Command + Shift + .** to show hidden folders. If your browser will not upload a folder, use GitHub's **Add file → Create new file** and type its relative path to create each missing nested file.
+4. Under **Settings → Pages → Build and deployment**, choose **GitHub Actions** as the deployment source.
+5. Open **Actions → EuroOffice Browser-only Proof of Concept → Run workflow**. A push to `main` may also trigger a run automatically. The Actions run may consume significant time and temporary disk space because the source package is large. Watch the build logs.
+6. If the build **and** Pages deployment succeed, open the URL displayed for the `github-pages` environment (normally `https://YOUR-ACCOUNT.github.io/nurse-memo-eurooffice-poc/`).
+7. Select an entirely fictional `.docx` document and test Open, edit, Export DOCX, Export PDF, read-only and state. The harness logs protocol events without sending document contents to a backend. A successful load is **not** sufficient; verify the downloaded files and compare layout/pagination to Ranuts.
 
-1. Download and extract the ZIP on your MacBook.
-2. On GitHub, open your *testing* repository, not `nursememo`.
-3. In **Settings → Pages**, set **Source: GitHub Actions**.
-4. Upload the **contents** of the extracted folder into the repository root (`index.html`, `assets/`, `fixtures/`, `.github/`, `tests/`). On macOS, `Command + Shift + .` shows hidden folders including `.github`.
-5. Commit. Check **Actions → Deploy Nurse Memo Document Test**. Wait for green success.
-6. Open `https://YOURNAME.github.io/YOUR-TEST-REPO/` (the exact URL appears under Settings → Pages).
+### What GitHub Actions does
 
-### If upgrading from our Canvas Editor test
+- Checks out `Ranuts/document` at `1301bb8bdac9092c4eb88a6f2f4ff5080cec68bd`.
+- Downloads the official Euro-Office `v9.3.5-rc.1` AMD64 Debian release directly into the runner (it is not installed as a server). The download URL is inside `scripts/build-poc.sh`. Optionally, set the repository Actions variable `EUROOFFICE_DEB_SHA256` to an independently verified release checksum. The runner always logs the downloaded SHA-256.
+- Extracts only `sdkjs`, `web-apps`, and `dictionaries`; uses the documented publisher transplant script and patches supplied with the uploaded `@kreijstal/eurooffice` package.
+- Gets the pinned converter package `@kreijstal/eurooffice-sdkjs-common@9.3.5-rc.1.build.1`. The two converter files have **hardcoded SHA-256 integrity checks** from your supplied npm archive. It does not use placeholder WASM files.
+- Builds Ranuts with a frozen pnpm lockfile; retains its browser-only Offline controller and iframe bridge.
+- Packages the Word-only output under `/nurse-memo-eurooffice-poc/office/`, with static path corrections, a raw `.wasm` fallback and a compressed gzip streaming loader (GitHub Pages cannot set `Content-Encoding: br` for `.wasm.br`). Removes unrelated spreadsheet and presentation engines.
+- Verifies existence of the browser bridge, DOCX engine, WASM, font files and the static site before deploying with GitHub Pages.
 
-The included `.github/workflows/deploy-pages.yml` is deliberately the same workflow path as the previous project, so it replaces the old deployment workflow. **The previous Vite `src/`, `package.json`, `vite.config.js`, `public/` and old Canvas Editor tests can be deleted**; they are no longer used. The new workflow publishes **only** `index.html`, `assets/` and `fixtures/` into `_site`, so leftover Canvas files won't appear on the deployed website. You do not need to run commands on your Mac.
+## If the converter's npm package becomes unavailable
 
-## Test workflow
+Use the **browser-only fallback**. In your new GitHub repo, open **Releases → Draft a new release** and create the tag `editor-inputs` (name it *Editor build inputs*). Attach the original **`eurooffice-sdkjs-common-9.3.5-rc.1.build.1.tgz`** already uploaded to ChatGPT, then publish the release. (The archive is approximately 45 MB; a release asset is more appropriate than a normal Git commit.) Rerun Actions. The workflow tries this exact release asset when `npm pack` fails. No font packages are required for this path.
 
-1. When the external editor signals `document:ready`, the host automatically opens `night-memo-normal-10.docx`.
-2. Confirm **landscape A4** paper, editable table cells, legible headers and consistent paginated sheets.
-3. Change some text and add a row; observe page reflow.
-4. Click **Save edited DOCX**. Reopen the downloaded file with **Open local DOCX** and check preservation of edits.
-5. Click **Export PDF (API test)**. It requests `{ type:'document:save', payload:{targetExt:'PDF'}}`. If the deployed upstream editor does not support this conversion via embedding, the event log will show its error. **Alternative:** use its built-in File / Download / PDF or Export PDF functionality.
-6. Click **Stress test · 72 + 38 rows**. Compare repeated table headings, rows at page breaks, and PDF page count against the live editor.
-7. Verify PDF text selection in Chrome Preview, and upload the exported PDFs for comparison.
+**Do not upload the 600 MB `.deb`**. The runner downloads it. Do not add any credentials or patient files to the repository.
 
-The parent page never considers a save successful until the editor sends a response with a real DOCX ZIP or `%PDF-` file signature. Errors are displayed in the event log. If the editor doesn't send a `document:ready` event within 35 seconds, the page displays a link to the standalone editor.
+## If Actions fails
 
-## Fallback if the iframe is blocked
+Report the **first failed step** and its actual error, not only the last `Process completed with exit code 1` line. Known possible failures include:
 
-1. Download the [normal DOCX](fixtures/night-memo-normal-10.docx) or [stress DOCX](fixtures/night-memo-stress-72-38.docx) from the test page.
-2. Open <https://edit.chaxus.com/editor> in another tab.
-3. Open the downloaded `.docx` using the editor's file picker.
-4. Edit/export and send the PDF and screenshots back for assessment.
+| Error / step | Interpretation |
+| --- | --- |
+| Checkout exact Ranuts source | The pinned commit could not be fetched or the repo was moved. The script does not silently substitute another revision. |
+| Download official release | GitHub's release download failed or exceeded the runner's capacity. Check the URL, runner quota and network. |
+| `npm pack` and missing converter | The third-party package is unpublished; use the release-asset fallback above. |
+| SHA256 mismatch | The downloaded converter is different from the inspected archive. Do **not** disable the check. |
+| `git apply --check` | The pinned upstream source no longer matches the publisher's patch. |
+| `eurooffice-into-ranuts.py` | The source of the Offline controller or a target engine asset changed. No generic text replacement is attempted. |
+| `x2t` loader patch | Browser WASM loader did not match the known structure, so packaging refused to produce a broken editor. |
+| Site over 900 MiB | The Word-only static output exceeded the conservative Pages size guard. No incomplete site is deployed. |
+| Editor loads but export fails | A **runtime incompatibility**, requiring browser debugging and potentially a newer or corrected offline bridge. A green Actions tick alone is not proof of compatibility. |
 
-This fallback still tests the actual Word processing engine, but does **not** test the embedding protocol.
+## Acceptance criteria
 
-## Licence and deployment notes
+1. Open a **fictional** Nurse Memo-style DOCX with headers, tables and several formatting styles.
+2. Edit text; export and reopen DOCX without corruption or missing text.
+3. Export PDF; confirm `%PDF-` signature and verify page size/pagination visually.
+4. Toggle genuine read-only mode, then editable mode.
+5. Test toolbar Save and the host-side export buttons, which have different event paths.
+6. Compare output font substitution and layout to the existing pinned Ranuts editor.
+7. Test repeated loads, long documents and memory consumption on the same browsers used by the hospital.
 
-* The external editor is by ranuts and incorporates ONLYOFFICE technology. See its [AGPL-3.0 licence and NOTICE](https://github.com/ranuts/document/blob/main/NOTICE). This test **does not** distribute the editor's source or compiled files.
-* Do not strip licensing, attribution or branding from any future self-hosted editor deployment.
-* No external credentials, tokens or API keys are used by the test host.
-* GitHub Actions only validates and publishes static files. It does not download/build the editor.
-* This test is dependent on upstream availability and behaviour, and has not been tested live in this build environment. The included structural checks do not prove editing, pagination, or PDF fidelity.
+If any criterion fails, keep the current Nurse Memo editor. No files in this PoC automatically modify Nurse Memo.
 
-## Verification
+## Source / licensing
 
-GitHub Actions runs:
+The editor merges pinned [Ranuts/document](https://github.com/Ranuts/document) sources with the official [Euro-Office DocumentServer](https://github.com/Euro-Office/DocumentServer/releases/tag/v9.3.5-rc.1) binaries. The transplant script and `.patch` are unmodified copies of `build/eurooffice-into-ranuts.py` and `build/ranuts-document.patch` from `@kreijstal/eurooffice@9.3.5-rc.1.build.1`, supplied by the user. These are source-level integration materials derived from AGPL-licensed components. Their inclusion here does not replace upstream notices, licenses, or source availability duties; review AGPL and third-party font license compliance before any institutional use.
 
-```sh
-node --check assets/app.js
-python3 tests/check_project.py
-```
+The official `.deb` release is a community test release. The third-party npm converter is not a separately verified official Euro-Office distribution. It is pinned for this prototype, not approved for production.
 
-The two DOCX fixtures have been independently rendered and visually inspected in a document renderer; those checks validate the test data, **not** ranuts/document functionality. Results and known gaps are in `TEST_REPORT.md`.
+## Environment limitations and verification status
+
+The ZIP has been syntax-checked and its workflow/scripts reviewed against the uploaded source archives. **A full build and browser-level DOCX/PDF edit/export have not yet been successfully run in this environment**, since outbound access to the official large release is blocked here. The first GitHub Actions run is therefore a real integration test, not a guaranteed deployment. See the first failed step if it does not complete.
