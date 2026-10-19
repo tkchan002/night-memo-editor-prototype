@@ -70,3 +70,48 @@ The official `.deb` release is a community test release. The third-party npm con
 ## Environment limitations and verification status
 
 The ZIP has been syntax-checked and its workflow/scripts reviewed against the uploaded source archives. **A full build and browser-level DOCX/PDF edit/export have not yet been successfully run in this environment**, since outbound access to the official large release is blocked here. The first GitHub Actions run is therefore a real integration test, not a guaranteed deployment. See the first failed step if it does not complete.
+
+
+## Converter import error (`Import #0 "env"`)
+
+In the first deployed proof of concept, the Word interface loaded, but DOCX
+opening failed with `X2T module failed to instantiate: ... Import #0 "env"`.
+The pinned npm converter's verified WASM instead imports namespace `a` and
+its matching JavaScript glue supplies `a`. This error is consistent with
+wrong or stale bytes being used at runtime; it is not evidence that the DOCX
+file is corrupt. The precise cause of the remote mismatch has **not yet**
+been confirmed.
+
+This version copies the verified converter pair into the final Vite output
+*after* the build, verifies its SHA-256 and WebAssembly import namespace
+before packaging and after packaging, and cache-busts the JavaScript/WASM
+paths. The test page also includes a **Check deployed converter assets** button
+that checks the exact bytes served by GitHub Pages. Run this button first.
+
+If the integrity preflight succeeds but the editor still fails with `env`,
+the loader may be fetching a *different* resource at runtime (or a service
+worker may have cached one). Copy the diagnostic events and share the browser
+Console's failing WebAssembly URL. Do not attempt to modify the document file.
+The demo's `document:opened` acknowledgment alone is not proof that the
+converter successfully rendered or saved the DOCX.
+
+Only update the standalone prototype, never clinical Nurse Memo, until a
+real DOCX is opened and exported to both DOCX and PDF successfully.
+
+### Updating from the previously deployed GitHub Pages prototype
+
+Download the small v3 replacement archive, extract it, and update only the
+listed files in the same relative paths in your GitHub repository. The
+workflow file does not need to change. GitHub Actions should automatically
+start on the `main` branch. Do not upload any `.tgz`, `.deb`, patient data, or
+large editor binaries to the Git repository.
+
+Once the new Pages deployment completes, open the prototype page and choose
+**Check deployed converter assets** before choosing a fictional DOCX. A
+successful integrity check proves only that GitHub Pages served the expected
+converter bytes; it does not prove that the editor fully supports the DOCX or
+PDF workflow.
+
+If the check fails, copy the diagnostic log. If it passes but DOCX opening
+still displays `Import #0 "env"`, share the browser Console error and Network
+request URL for the WASM asset. We must then trace the actual loader path.

@@ -21,6 +21,8 @@ const wasm=readFileSync(join(office,'sdkjs/common/wasm/x2t/x2t.wasm'));
 check(wasm.subarray(0,4).toString('hex')==='0061736d','Invalid WASM binary');
 const loader=readFileSync(join(office,'sdkjs/common/wasm/x2t/x2t_helper.js'),'utf8');
 check(loader.includes('DecompressionStream'), 'Gzip streaming loader patch missing');
+check(loader.includes('this.WASM_RAW_PATH'), 'Cache-busted x2t raw fallback missing');
+check(loader.includes('x2t.js?v='), 'Cache-busted x2t JS path missing');
 check(!loader.includes('x2t.wasm.br'), 'Unsupported .br WASM reference remains in loader');
 const sdk=readFileSync(join(office,'sdkjs/word/sdk-all-min.js'),'utf8');
 check(sdk.includes('window.isOffline=!0'), 'SDK lost the offline compatibility layer');

@@ -21,7 +21,10 @@ test('the site communicates using bounded origin/source-checked iframe messages'
  const app=read('site/poc.js');
  for (const value of ['event.origin!==editorOrigin','event.source!==frame.contentWindow','document:open-buffer','document:save','document:set-readonly','document:get-state'])
   assert.ok(app.includes(value),`Missing browser harness behavior: ${value}`);
- assert.ok(!app.includes('fetch('),'The demo must not upload fictional files to a server');
+ assert.ok(app.includes('fetchVerifiedAsset'), 'Missing static converter self-diagnosis');
+ assert.ok(app.includes('await verifyConverter();'), 'Document open must verify deployed converter first');
+ assert.doesNotMatch(app, /method\s*:\s*['\"](?:POST|PUT|PATCH)['\"]/i,
+   'The demo must not upload fictional documents to a server');
 });
 test('build scripts pin source versions and validate converter digest',()=>{
  const shell=read('scripts/build-poc.sh');
@@ -41,4 +44,23 @@ test('legal notices are staged from source checkout rather than required in Vite
  assert.match(packaging,/publishLegalDocument\('NOTICE'/);
  assert.match(packaging,/ranutsCheckout/);
  assert.doesNotMatch(packaging,/\['index\.html','editor\.html','history\.html','sdkjs','web-apps','assets','LICENSE'/);
+});
+
+test('converter mismatch is blocked at the final build boundary',()=>{
+ const sh=read('scripts/build-poc.sh');
+ assert.match(sh,/install -Dm644 "\$X2T\/x2t\.wasm" "\$RANUTS\/dist\//);
+ assert.match(sh,/check-converter-pair\.mjs" "\$ROOT\/dist\/office\//);
+ const pkg=read('scripts/package-site.mjs');
+ assert.match(pkg,/examineConverter\(wasmBytes/);
+ assert.match(pkg,/converterWasmSha256/);
+ assert.match(pkg,/converterRevision/);
+});
+
+test('static test UI verifies deployed converter and does not mark document as rendered on open acknowledgment',()=>{
+ const markup=read('site/index.html');
+ const js=read('site/poc.js');
+ assert.match(markup,/id="converterCheck"/);
+ assert.match(js,/x2t\.wasm\.gz/);
+ assert.match(js,/crypto\.subtle\.digest/);
+ assert.match(js,/Open acknowledged; check rendered pages/);
 });

@@ -14,6 +14,7 @@ import { existsSync, promises as fs } from 'node:fs';
 import { basename, dirname, extname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { brotliDecompressSync, gzipSync, gunzipSync } from 'node:zlib';
+import { PINNED, examineConverter } from './check-converter-pair.mjs';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const source = resolve(process.argv[2] || '.work/ranuts/dist');
@@ -151,6 +152,17 @@ if (!existsSync(raw) || (await fs.readFile(raw)).subarray(0,4).toString('hex') !
 // native streaming DecompressionStream('gzip') before WASM instantiation.
 // Retain the raw .wasm path for browsers without DecompressionStream.
 const wasmBytes = await fs.readFile(raw);
+const jsGlue = join(destination,'sdkjs/common/wasm/x2t/x2t.js');
+// Validate the complete, deployable pair, not only WebAssembly magic bytes.
+// A different valid WASM can import `env` while this Emscripten JS supplies
+// `a`, producing a false-positive build and a fatal document-open error.
+// Synthetic converter fixtures are permitted only under the explicit local
+// smoke-test flag. GitHub's real build never sets this flag.
+const testFixture = process.env.POC_TEST_FIXTURE === '1';
+const pairing = examineConverter(wasmBytes, await fs.readFile(jsGlue,'utf8'),
+  testFixture ? {wasm:null, js:null, importModule:'a'} : PINNED);
+if (!pairing.ok) throw new Error(`Incompatible x2t WASM/JS pair in deployed assets:\n${pairing.errors.join('\n')}`);
+const converterRevision = PINNED.wasm.slice(0, 16);
 const gzipPath = `${raw}.gz`;
 const gzipped = gzipSync(wasmBytes, { level: 9 });
 if (!gunzipSync(gzipped).equals(wasmBytes)) throw new Error('Gzip converter round-trip failed.');
@@ -160,15 +172,18 @@ const helperPath = join(destination, 'sdkjs/common/wasm/x2t/x2t_helper.js');
 const helper = await fs.readFile(helperPath, 'utf8');
 const wasmDeclaration = /(this\.WASM_PATH\s*=\s*['"][^'"\n]*x2t\.wasm['"]\s*;?)/g;
 const fetchDeclaration = /(var wasmPath = this\.WASM_PATH;)/g;
+const scriptDeclaration = /(this\.SCRIPT_PATH\s*=\s*['"][^'"\n]*x2t\.js['"]\s*;?)/g;
 const validResponse = /(if \(response\.ok\) return response;)/g;
-if ([...helper.matchAll(wasmDeclaration)].length !== 1 ||
+if ([...helper.matchAll(scriptDeclaration)].length !== 1 ||
+    [...helper.matchAll(wasmDeclaration)].length !== 1 ||
     [...helper.matchAll(fetchDeclaration)].length !== 1 ||
     [...helper.matchAll(validResponse)].length !== 1) {
   throw new Error('Pinned ONLYOFFICE x2t loader changed; refuse an unverified gzip patch.');
 }
 const patchedHelper = helper
-  .replace(wasmDeclaration, `$1\n        this.WASM_GZIP_PATH = this.WASM_PATH + '.gz';`)
-  .replace(fetchDeclaration, `var wasmPath = typeof DecompressionStream === 'function' ? this.WASM_GZIP_PATH : this.WASM_PATH;\n        var gzipResponse = wasmPath === this.WASM_GZIP_PATH;`)
+  .replace(scriptDeclaration, match => match.replace(/x2t\.js(['"])/, `x2t.js?v=${converterRevision}$1`))
+  .replace(wasmDeclaration, `$1\n        this.WASM_GZIP_PATH = this.WASM_PATH + '.gz?v=${converterRevision}';\n        this.WASM_RAW_PATH = this.WASM_PATH + '?v=${converterRevision}';`)
+  .replace(fetchDeclaration, `var wasmPath = typeof DecompressionStream === 'function' ? this.WASM_GZIP_PATH : this.WASM_RAW_PATH;\n        var gzipResponse = wasmPath === this.WASM_GZIP_PATH;`)
   .replace(validResponse, `if (response.ok) {\n                        if (!gzipResponse) return response;\n                        if (!response.body) throw new Error('x2t gzip response has no stream');\n                        return new Response(response.body.pipeThrough(new DecompressionStream('gzip')),\n                            { headers: { 'Content-Type': 'application/wasm' } });\n                    }`);
 await fs.writeFile(helperPath, patchedHelper);
 
@@ -211,6 +226,9 @@ const meta = {
   sourceUrl: 'https://github.com/ranuts/document', licence: 'AGPL-3.0',
   packagingFix: 'onlyoffice-nested-index-path-v2',
   converterDelivery: 'gzip-streaming-with-raw-fallback',
+  converterWasmSha256: pairing.wasmSha256,
+  converterJsSha256: pairing.jsSha256,
+  converterImports: pairing.importedModules,
   description: 'Experimental Word-only EuroOffice 9.3.5-rc.1 + pinned Ranuts/document, standalone GitHub Pages prototype. Not for patient data.',
 };
 await fs.writeFile(join(destination,'eurooffice-poc-build.json'),JSON.stringify(meta,null,2)+'\n');

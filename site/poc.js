@@ -13,6 +13,8 @@ let ready = false;
 let hasDocument = false;
 let serial = 0;
 let pending = null;
+let checkedConverter = false;
+let converterCheckPromise = null;
 const rows = [];
 function log(message) {
   const line = `${new Date().toLocaleTimeString()}  ${message}`;
@@ -27,6 +29,7 @@ function status(message, error=false) {
 }
 function refresh() {
   $('open').disabled = !ready || !$('file').files.length || !!pending;
+  $('converterCheck').disabled = !!pending;
   for (const button of ['docx','pdf','readOnly','editable','state'])
     $(button).disabled = !ready || !hasDocument || !!pending;
 }
@@ -54,8 +57,8 @@ function send(type, payload={}, waitFor='') {
 async function execute(label, task) {
   try {
     status(`${label}…`);
-    await task();
-    status(`${label} completed`);
+    const result=await task();
+    status(typeof result === 'string' ? result : `${label} completed`);
   } catch(error) {
     status(`${label} failed: ${error.message}`,true);
     log(`ERROR ${label}: ${error.message}`);
@@ -94,6 +97,53 @@ function download(blob,filename) {
   setTimeout(()=>URL.revokeObjectURL(href),15000);
 }
 function checkDocx(bytes) { return bytes[0]===0x50 && bytes[1]===0x4b; }
+/** Check the actual *deployed* JS+WASM, not just the inputs fetched in CI.
+ * This catches stale GitHub Pages assets, stale service worker caches and any
+ * Vite output unexpectedly overwritten between the input and deployed site.
+ */
+async function sha256(bytes) {
+  return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)),
+    b=>b.toString(16).padStart(2,'0')).join('');
+}
+async function fetchVerifiedAsset(path, expectedHash, gzip=false) {
+  const url=new URL(`./office/sdkjs/common/wasm/x2t/${path}`,location.href);
+  url.searchParams.set('v',expectedHash.slice(0,16));
+  const response=await fetch(url.href,{cache:'reload'});
+  if (!response.ok) throw new Error(`${path}: HTTP ${response.status} at ${url.pathname}`);
+  let bytes;
+  if (gzip) {
+    if (typeof DecompressionStream!=='function' || !response.body)
+      throw new Error('Browser does not support the converter gzip probe');
+    bytes=await new Response(response.body.pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
+  } else bytes=await response.arrayBuffer();
+  const actualHash=await sha256(bytes);
+  if (actualHash!==expectedHash)
+    throw new Error(`${path} SHA256 mismatch: expected ${expectedHash.slice(0,16)}…, received ${actualHash.slice(0,16)}…`);
+  log(`Verified ${path}: ${actualHash.slice(0,16)}… (${bytes.byteLength.toLocaleString()} bytes)`);
+  return bytes;
+}
+async function verifyConverter() {
+  if (checkedConverter) return;
+  if (converterCheckPromise) return converterCheckPromise;
+  converterCheckPromise=(async()=>{
+    const manifestUrl=new URL('./office/eurooffice-poc-build.json',location.href);
+    const metaResponse=await fetch(manifestUrl.href,{cache:'reload'});
+    if (!metaResponse.ok) throw new Error(`Build metadata missing: HTTP ${metaResponse.status}`);
+    const meta=await metaResponse.json();
+    if (!/^[0-9a-f]{64}$/.test(meta.converterJsSha256||'') ||
+        !/^[0-9a-f]{64}$/.test(meta.converterWasmSha256||''))
+      throw new Error('Site lacks the new converter-integrity metadata. Deploy updated GitHub Actions files first.');
+    await fetchVerifiedAsset('x2t.js',meta.converterJsSha256);
+    // Probe the exact gzip asset that the editor loads, not the raw fallback.
+    // The SHA is over decompressed WASM bytes, identical to the pinned archive.
+    await fetchVerifiedAsset('x2t.wasm.gz',meta.converterWasmSha256,true);
+    checkedConverter=true;
+    log(`Converter preflight passed (WASM imports: ${JSON.stringify(meta.converterImports)})`);
+  })();
+  try{return await converterCheckPromise;}finally{converterCheckPromise=null;}
+}
+$('converterCheck').addEventListener('click',()=>execute('Check deployed converter',verifyConverter));
+
 async function exportFile(format) {
   const payload=await send('document:save',{targetExt:format},'document:saved');
   if (!(payload.file instanceof Blob)) throw new Error('Editor did not return a Blob');
@@ -107,11 +157,13 @@ $('file').addEventListener('change',refresh);
 $('open').addEventListener('click',()=>execute('Open DOCX',async()=>{
   const f=$('file').files?.[0];
   if (!f || !/\.docx$/i.test(f.name)) throw new Error('Select a .docx file');
+  await verifyConverter();
   const data=await f.arrayBuffer();
   if (!checkDocx(new Uint8Array(data))) throw new Error('Selected file does not look like a DOCX');
   await send('document:open-buffer',{buffer:data,fileName:f.name,readonly:false},'document:opened');
   hasDocument=true; $('docName').textContent=f.name;
-  log(`Opened ${f.name} (${f.size.toLocaleString()} bytes)`);
+  log(`Document-open message acknowledged for ${f.name} (${f.size.toLocaleString()} bytes); rendering and export not yet verified`);
+  return 'Open acknowledged; check rendered pages and DOCX/PDF export before treating this as working';
 }));
 $('docx').addEventListener('click',()=>execute('Export DOCX',()=>exportFile('DOCX')));
 $('pdf').addEventListener('click',()=>execute('Export PDF',()=>exportFile('PDF')));

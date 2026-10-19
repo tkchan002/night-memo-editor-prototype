@@ -91,7 +91,16 @@ pnpm --dir "$RANUTS" install --frozen-lockfile
 (cd "$RANUTS/packages/shared" && npx tsc -p tsconfig.json)
 pnpm --dir "$RANUTS" run build
 
+# `public/` and Vite's compiled `dist/` are distinct trees. Verify the exact
+# x2t pair at each boundary; copying before Vite alone did not prevent a
+# mismatched converter from appearing in the deployed runtime.
+node "$ROOT/scripts/check-converter-pair.mjs" "$X2T"
+install -Dm644 "$X2T/x2t.wasm" "$RANUTS/dist/sdkjs/common/wasm/x2t/x2t.wasm"
+install -Dm644 "$X2T/x2t.js" "$RANUTS/dist/sdkjs/common/wasm/x2t/x2t.js"
+node "$ROOT/scripts/check-converter-pair.mjs" "$RANUTS/dist/sdkjs/common/wasm/x2t"
+
 printf 'Packaging Word-only GitHub Pages build (no server)\n'
 node "$ROOT/scripts/package-site.mjs" "$RANUTS/dist" "$ROOT/dist"
 node "$ROOT/scripts/verify-site.mjs" "$ROOT/dist"
+node "$ROOT/scripts/check-converter-pair.mjs" "$ROOT/dist/office/sdkjs/common/wasm/x2t"
 echo 'PASS: static structure and integrity checks. Real browser edit/save/export tests still required.'
