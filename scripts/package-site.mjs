@@ -1,6 +1,6 @@
 /**
- * Publish the pinned EuroOffice/Ranuts hybrid as a standalone browser test.
- * Editor assets live at <siteBase>/office/. The test harness lives at <siteBase>/.
+ * Publish the pinned EuroOffice/Ranuts hybrid as a full-page document editor.
+ * Editor assets live at <siteBase>/office/. The Word editor application shell lives at <siteBase>/.
  *
  * Important ONLYOFFICE invariant: a string literal "/index.html" in the SDK
  * can be a filename appended to a constructed directory. NEVER globally rebase
@@ -261,10 +261,10 @@ await walk(destination, async path => {
 if (bytes > 900*1024*1024) {
   throw new Error(`Word-only editor too large for GitHub Pages: ${Math.ceil(bytes/1024/1024)} MiB`);
 }
-// Copy the separately authored test harness into the project Pages root.
+// Copy the standalone Word editor shell and the blank DOCX template into Pages root.
 const harness = resolve('site');
-for (const file of ['index.html','poc.js','poc.css']) {
-  if (!existsSync(join(harness,file))) throw new Error(`Missing test harness: ${file}`);
+for (const file of ['index.html','app.js','app.css','editor-core.mjs','blank.docx']) {
+  if (!existsSync(join(harness,file))) throw new Error(`Missing editor application file: ${file}`);
   await fs.copyFile(join(harness,file),join(destination,'..',file));
 }
 console.log(`Prepared ${relative(process.cwd(),destination)} at ${officeBase}; ${changed}/${scanned} rewritten; ${files} editor files; ${(bytes/1024/1024).toFixed(1)} MiB.`);

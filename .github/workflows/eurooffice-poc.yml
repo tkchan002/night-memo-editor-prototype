@@ -1,4 +1,4 @@
-name: EuroOffice Browser-only Proof of Concept
+name: EuroOffice Full-page Word Editor
 
 on:
   workflow_dispatch:
@@ -16,7 +16,7 @@ env:
   EUROOFFICE_DEB_SHA256: ${{ vars.EUROOFFICE_DEB_SHA256 }}
 
 concurrency:
-  group: eurooffice-poc-pages
+  group: eurooffice-word-pages
   cancel-in-progress: false
 
 jobs:
@@ -27,7 +27,7 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Checkout proof-of-concept scripts
+      - name: Checkout Word editor source
         uses: actions/checkout@v4
       - name: Checkout exact Ranuts source used by package publisher
         uses: actions/checkout@v4
@@ -45,7 +45,7 @@ jobs:
         with:
           version: '11.4.0'
           run_install: false
-      - name: Check proof-of-concept scripts
+      - name: Run Word editor regression tests
         run: |
           bash -n scripts/build-poc.sh
           node --test tests/*.test.mjs
@@ -59,6 +59,6 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: dist
-      - name: Deploy standalone prototype
+      - name: Deploy full-page editor
         id: deployment
         uses: actions/deploy-pages@v4

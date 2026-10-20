@@ -4,7 +4,7 @@ const root=resolve(process.argv[2]||'dist');
 const office=join(root,'office');
 function check(condition,message){if(!condition)throw new Error(message);}
 for (const name of [
-  '.nojekyll','index.html','poc.js','poc.css','office/editor.html',
+  '.nojekyll','index.html','app.js','app.css','editor-core.mjs','blank.docx','office/editor.html',
   'office/assets','office/sdkjs/word/sdk-all-min.js',
   'office/sdkjs/common/wasm/x2t/x2t.wasm',
   'office/sdkjs/common/wasm/x2t/x2t.wasm.gz',
@@ -17,6 +17,11 @@ for (const name of [
   'office/LICENSES/euro-office-LICENSE.txt',
   'office/LICENSES/euro-office-3rd-Party.txt',
 ]) check(existsSync(join(root,name)),`Deployment missing: ${name}`);
+const template=readFileSync(join(root,'blank.docx'));
+check(template.subarray(0,4).toString('hex')==='504b0304','Blank DOCX template is not a valid ZIP container');
+const markup=readFileSync(join(root,'index.html'),'utf8');
+check(markup.includes('id="editor"') && markup.includes('id="new"') && markup.includes('id="pdf"'), 'Missing full-page editor controls');
+check(!markup.includes('id="converterCheck"') && !markup.includes('id="log"'), 'Diagnostic test-bench controls must not appear');
 const wasm=readFileSync(join(office,'sdkjs/common/wasm/x2t/x2t.wasm'));
 check(wasm.subarray(0,4).toString('hex')==='0061736d','Invalid WASM binary');
 // The old Ranuts .br converter has a different import ABI and must not be
@@ -40,4 +45,4 @@ const metadata=JSON.parse(readFileSync(join(office,'eurooffice-poc-build.json'),
 check(metadata.officeBase.endsWith('/office/'),'Invalid editor base path');
 check(metadata.euroofficeRelease==='v9.3.5', 'This test must publish official final EuroOffice v9.3.5');
 check(metadata.converterPackage==='@kreijstal/eurooffice-sdkjs-common@9.3.5-rc.1.build.1', 'This test must preserve pinned RC converter identity');
-console.log(`PASS: PoC site structure, offline bridge, x2t WASM, gzip loader and ${numbered.length} numbered fonts. Browser compatibility not yet established.`);
+console.log(`PASS: full-page Word editor site structure, offline bridge, x2t WASM, gzip loader and ${numbered.length} numbered fonts. Browser compatibility not yet established.`);

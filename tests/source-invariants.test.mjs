@@ -17,14 +17,24 @@ test('publisher patch provides iframe events and path-aware x2t worker',()=>{
  for (const value of ['document:user-save','document:modified','document:saved','WORKER_URL','BASE_PATH'])
    assert.ok(patch.includes(value),`Missing bridge compatibility: ${value}`);
 });
-test('the site communicates using bounded origin/source-checked iframe messages',()=>{
- const app=read('site/poc.js');
- for (const value of ['event.origin!==editorOrigin','event.source!==frame.contentWindow','document:open-buffer','document:save','document:set-readonly','document:get-state'])
-  assert.ok(app.includes(value),`Missing browser harness behavior: ${value}`);
- assert.ok(app.includes('fetchVerifiedAsset'), 'Missing static converter self-diagnosis');
- assert.ok(app.includes('await verifyConverter();'), 'Document open must verify deployed converter first');
- assert.doesNotMatch(app, /method\s*:\s*['\"](?:POST|PUT|PATCH)['\"]/i,
-   'The demo must not upload fictional documents to a server');
+test('embedded EuroOffice always starts in Modern Light without changing non-embedded Ranuts theme',()=>{
+ const patch=read('scripts/vendor/ranuts-document.patch');
+ assert.match(patch,/diff --git a\/lib\/onlyoffice\/ui-theme\.ts b\/lib\/onlyoffice\/ui-theme\.ts/);
+ assert.match(patch,/\+const EMBED_UI_THEME = 'theme-white';/);
+ assert.match(patch,/\+  if \(isEmbeddedEditor\(\)\) return EMBED_UI_THEME;/);
+ assert.match(patch,/\+if \(typeof document !== 'undefined'.*!isEmbeddedEditor\(\)\)/);
+ assert.match(patch,/export const DEFAULT_UI_THEME = 'theme-classic-light';/);
+ assert.doesNotMatch(read('site/app.js'), /localStorage\.(?:setItem|removeItem|clear)\(/);
+});
+test('Word shell keeps origin/source-checked messages and verified converter preflight',()=>{
+ const app=read('site/app.js');
+ const helpers=read('site/editor-core.mjs');
+ for (const value of ['messageFromEditor(event, editorOrigin, frame.contentWindow)',
+   'document:open-buffer','document:save','document:saved', 'verifyAsset(', 'await verifyConverter();'])
+  assert.ok(app.includes(value),`Missing Word editor behavior: ${value}`);
+ assert.match(helpers,/event.origin !== editorOrigin \|\| event.source !== contentWindow/);
+ assert.doesNotMatch(app, /method\s*:\s*['"](?:POST|PUT|PATCH)['"]/i,
+   'Browser-only demo must not upload documents to a server');
 });
 test('build scripts pin source versions and validate converter digest',()=>{
  const shell=read('scripts/build-poc.sh');
@@ -56,13 +66,19 @@ test('converter mismatch is blocked at the final build boundary',()=>{
  assert.match(pkg,/converterRevision/);
 });
 
-test('static test UI verifies deployed converter and does not mark document as rendered on open acknowledgment',()=>{
+test('full-page Word interface has no test bench and loads blank document on startup',()=>{
  const markup=read('site/index.html');
- const js=read('site/poc.js');
- assert.match(markup,/id="converterCheck"/);
+ const js=read('site/app.js');
+ const css=read('site/app.css');
+ for (const value of ['id="editor"','id="new"','id="open"','id="docx"','id="pdf"','id="documentTitle"'])
+  assert.ok(markup.includes(value),`Missing editor UI component: ${value}`);
+ assert.doesNotMatch(markup, /id="(?:converterCheck|log|state|readOnly|editable)"/);
+ assert.match(js,/newDocument\(true\)/);
+ assert.match(js,/blank\.docx/);
  assert.match(js,/x2t\.wasm\.gz/);
  assert.match(js,/crypto\.subtle\.digest/);
- assert.match(js,/Open acknowledged; check rendered pages/);
+ assert.match(js,/document:saved/);
+ assert.match(css,/100dvh/);
 });
 
 

@@ -1,36 +1,61 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>EuroOffice / Ranuts — Browser-only test</title>
-<link rel="stylesheet" href="./poc.css">
-<script type="module" src="./poc.js"></script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f8fafc">
+  <title>EuroOffice — Document editor</title>
+  <link rel="stylesheet" href="./app.css">
+  <script type="module" src="./app.js"></script>
 </head>
 <body>
-<header class="top"><div><h1>EuroOffice × Ranuts</h1><p>Official 9.3.5 editor + experimental RC converter • browser-only test</p></div><span class="tag">Experimental • not for clinical data</span></header>
-<main class="layout">
-  <section class="controls" aria-label="Editor test controls">
-    <h2>1. Choose a fictional DOCX</h2>
-    <p>Files stay in this browser. Do not use real patient information.</p>
-    <input id="file" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
-    <button id="converterCheck">Check deployed converter assets</button>
-    <button id="open" disabled>Open in editor</button>
-    <h2>2. Test exports</h2>
-    <div class="button-grid"><button id="docx" disabled>Export DOCX</button><button id="pdf" disabled>Export PDF</button></div>
-    <p>Each export is checked for basic file signatures and then downloaded.</p>
-    <h2>3. Test permissions</h2>
-    <div class="button-grid"><button id="readOnly" disabled>Set read-only</button><button id="editable" disabled>Set editable</button></div>
-    <button id="state" disabled>Request editor state</button>
-    <h2>Diagnostic events</h2>
-    <div class="status"><span class="dot" id="dot"></span><output id="status">Waiting for editor</output></div>
-    <pre id="log" aria-live="polite"></pre>
-    <button id="copyLog">Copy diagnostic log</button>
-    <p class="footnote">The document converter is from 9.3.5-rc.1 and may be incompatible with the final 9.3.5 editor. A successful page load is not proof that DOCX/PDF export or document formatting is correct. Compare exports with your current Nurse Memo editor.</p>
-  </section>
-  <section class="editorPane" aria-label="EuroOffice document editor">
-    <div class="editorHeader"><strong>Editor</strong><span id="docName">No document opened</span></div>
-    <iframe id="editor" title="EuroOffice test document editor" allow="clipboard-read; clipboard-write"></iframe>
-  </section>
-</main>
-</body></html>
+  <div class="app" id="app">
+    <header class="appbar">
+      <div class="brand" aria-label="EuroOffice Word editor">
+        <span class="brandMark" aria-hidden="true">E</span>
+        <span class="brandName">EuroOffice</span>
+        <span class="brandDivider" aria-hidden="true"></span>
+      </div>
+      <div class="documentIdentity">
+        <svg class="documentIcon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M7 2.8h7l4.5 4.5V21H7a2 2 0 0 1-2-2V4.8a2 2 0 0 1 2-2Z"/><path d="M14 3v5h5"/><path d="M8.5 12h7M8.5 15.5h7"/></svg>
+        <div class="documentText">
+          <input id="documentTitle" type="text" value="Untitled document" aria-label="Document name" autocomplete="off" spellcheck="false" maxlength="120" disabled>
+          <span class="documentSubtitle" id="saveStatus" role="status" aria-live="polite">Starting editor…</span>
+        </div>
+      </div>
+      <nav class="actions" aria-label="Document actions">
+        <button type="button" id="new" class="action" disabled title="New blank document">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>New</span>
+        </button>
+        <button type="button" id="open" class="action" disabled title="Open DOCX (Ctrl+O / Cmd+O)">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6.5h6l2 2H21l-2 10H4L2.5 7.8A1.2 1.2 0 0 1 3 6.5Z"/></svg><span>Open</span>
+        </button>
+        <span class="actionDivider" aria-hidden="true"></span>
+        <button type="button" id="docx" class="action primary" disabled title="Download editable Word document">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-4-4 4 4 4-4M4.5 17v3h15v-3"/></svg><span>Save DOCX</span>
+        </button>
+        <button type="button" id="pdf" class="action" disabled title="Download as PDF">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l4 4v14H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm7 0v5h4M9 15h6M9 18h5"/></svg><span>PDF</span>
+        </button>
+      </nav>
+    </header>
+    <main class="workspace" aria-label="Word document workspace">
+      <iframe id="editor" title="EuroOffice Word document editor" allow="clipboard-read; clipboard-write"></iframe>
+      <div id="loading" class="loading" role="status" aria-live="polite">
+        <div class="loaderIcon" aria-hidden="true"><div class="loaderPage"></div></div>
+        <strong id="loadingTitle">Opening document editor</strong>
+        <p id="loadingDetail">Preparing a blank document…</p>
+        <button type="button" id="retry" class="retry" hidden>Try again</button>
+      </div>
+    </main>
+    <div id="dropOverlay" class="dropOverlay" hidden role="presentation">
+      <div class="dropInner">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m-4 4 4-4 4 4M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5"/></svg>
+        <strong>Drop your Word document here</strong>
+        <span>DOCX files only</span>
+      </div>
+    </div>
+    <input type="file" id="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden>
+  </div>
+</body>
+</html>

@@ -1,80 +1,73 @@
-# EuroOffice Browser — official v9.3.5 upgrade test
+# EuroOffice Browser — full-page Word editor
 
-**Experimental, browser-only, Word-only proof of concept. Not for patient or production use.**
+This repository builds a **full-page, browser-only DOCX editor**, using the **official EuroOffice DocumentServer v9.3.5** editor engine and the working Ranuts/document browser adapter. The application fills the available browser window. It uses **EuroOffice's original Word ribbon**, rather than reproducing Microsoft Word's controls in a custom UI.
 
-This repository is a complete GitHub Actions / GitHub Pages test-build recipe, derived from the user's v4 proof of concept. The editor engine comes from the **official Euro-Office DocumentServer v9.3.5 release** (not the release candidate). The standalone browser framework is a pinned `Ranuts/document` checkout. The browser-only adapter and the document converter are still from the earlier independently published RC integration.
+## What the site does
 
-## Read this first: important converter compatibility limitation
+- Immediately opens a real blank Word document, with A4 paper and 2.5 cm margins.
+- Shows the full EuroOffice editor and its native document-editing ribbon, starting in **Modern Light** (`theme-white`).
+- **New:** start a blank DOCX without leaving the page.
+- **Open:** select a local `.docx` document; Ctrl+O / Cmd+O opens the chooser. Drag/drop works onto the application shell.
+- **Save DOCX:** converts the edited document and triggers a DOCX download with its current document name.
+- **PDF:** converts and triggers a PDF download.
+- The embedded editor's own Save toolbar action and Ctrl+S / Cmd+S still trigger DOCX download through the `document:user-save` bridge.
+- Documents are opened locally and passed directly to the embedded editor using an origin-checked `postMessage` API. **No external document-storage server is implemented.**
 
-**The official final 9.3.5 editor is combined with a converter from `9.3.5-rc.1.build.1`.** A verified matching *final* v9.3.5 browser converter was not available for inspection when this ZIP was prepared. This is a deliberately **mixed-version compatibility experiment**, not a known-good final-release editor. The JS/WASM pair itself has pinned SHA-256 checks, but these checks DO NOT demonstrate compatibility with the newer EuroOffice editor. A successful Actions build DOES NOT demonstrate that DOCX opening, editing or exporting works.
+Do not confuse a browser download with a Supabase save. The version here is a *standalone document editor*; integration with Nurse Memo authentication and Supabase persistence is a separate task. There is a basic browser warning on refresh after an edit, but **no autosave or crash recovery**. Do not use real patient data or claim hospital-production approval without additional security, legal, functional and integration review.
 
-If the new engine changed an internal adapter anchor, the build stops instead of pretending compatibility. If the engine builds but has a runtime incompatibility, you must test it in a real browser with fictional files. If it fails, revert to the previously working v4 build.
+## Installation on GitHub Pages
 
-## How to deploy with the GitHub website (no CLI)
+1. Create a fresh GitHub repository. Extract this ZIP at the repository root, retaining the hidden `.github/` directory. Upload/commit all files, including `site/blank.docx` and `site/editor-core.mjs`.
+2. In **Settings → Pages → Build and deployment**, select **GitHub Actions**.
+3. Under **Actions**, run **EuroOffice Full-page Word Editor**, or push to `main`.
+4. The workflow checks out the pinned Ranuts source, locates the official EuroOffice v9.3.5 AMD64 Debian asset, downloads the pinned converter package, transplants the engine, builds the editor, validates the final distribution, and publishes it to GitHub Pages.
+5. Open the GitHub Pages URL. The editor should display a new blank document without requiring any diagnostic buttons. Test Open, editing, Save DOCX, and PDF before using the generated site further.
 
-1. **Prefer a separate public test repository**, so the new GitHub Pages deployment does not replace the user's existing v4 website. Create a GitHub repository, e.g. `eurooffice-935-test`.
-2. Extract this ZIP **locally**. Upload its **contents**, including hidden `.github/workflows/eurooffice-poc.yml`, to the **root** of the new repository. Do not upload the ZIP as a single GitHub source file. The `scripts/`, `tests/`, `site/`, `.github/`, `LICENSES/` and `README.md` must be in the repository root.
-3. In **Settings → Pages → Build and deployment**, choose **GitHub Actions**. Workflow permission defaults can remain read-only; the deployment job requests `pages: write` and `id-token: write`.
-4. Commit the upload on `main`. The workflow starts on push; you can also open **Actions → EuroOffice Browser-only Proof of Concept → Run workflow**.
-5. The workflow downloads the large official Debian release and the small source/dependency inputs itself. Neither the `.deb` nor the npm package is included in the ZIP. A large official `.deb` download may take time.
-6. Once the workflow reports a successful deployment, open the site link listed in the `github-pages` environment. First click **Check deployed converter assets**, then open a fictional DOCX and exercise open/edit/save, DOCX export and PDF export.
+**Requirements:** GitHub Actions with Ubuntu 24.04, Node.js 24, pnpm 11.4.0, GitHub Pages deployment enabled. Builds download large binary inputs and take substantially longer than ordinary static sites. The compiler and runtime are built in CI, **not** in the user's browser. End users only load a static site.
 
-**Do not upload real patient details or modify the current Nurse Memo production/demo repository for this experiment.**
+## Versioned inputs
 
-## Where each input comes from
-
-| Input | Source | Version / integrity handling |
+| Component | Version / origin | Role |
 |---|---|---|
-| Official EuroOffice editor (sdkjs/web-apps/dictionaries) | `Euro-Office/DocumentServer` GitHub Release | **v9.3.5 final**, AMD64 Debian `.deb` discovered via the exact-tag GitHub release API; Debian control fields checked |
-| Offline browser host and fonts | `Ranuts/document` | Exact commit `1301bb8bdac9092c4eb88a6f2f4ff5080cec68bd`, verified before applying local patch |
-| Standalone browser adapter | Included `scripts/vendor` integration script and patch from the earlier v4 integration | Kept largely unchanged; version-sensitive anchors fail closed |
-| Document converter | `@kreijstal/eurooffice-sdkjs-common` npm package | **9.3.5-rc.1.build.1**, both WASM and JS file digests checked; **compatibility with final editor unproven** |
-| Build dependencies | Ranuts lockfile / pnpm registry | `pnpm install --frozen-lockfile` with pnpm 11.4.0 and Node 24 |
+| EuroOffice DocumentServer | Official `v9.3.5` AMD64 `.deb` | Word editor and supporting UI assets |
+| Ranuts/document | Pinned commit in `scripts/versions.json` | Standalone browser editor, embed bridge, build framework |
+| `@kreijstal/eurooffice-sdkjs-common` | `9.3.5-rc.1.build.1` | Matched `x2t.js` and `x2t.wasm` converter pair; experimental with final editor |
+| Our custom patch | `scripts/vendor/ranuts-document.patch` | Modern Light embed default, offline file Save notifications, path-aware converter loader |
+| Browser shell | `site/` | Full-window app, DOCX open/new/download, PDF export, minimal status |
 
-This recipe is **not self-contained**. The downloaded GitHub and npm inputs are required at build time, as requested for this temporary test. The published site has no document-processing backend.
+The **EuroOffice editor version** is final 9.3.5; the **converter package is still an RC**. User tests of the preceding test bench reported DOCX opening, editing, DOCX and PDF export, fidelity, and multi-document round trips passing. This new full-page shell has source, unit, and packaging tests but must also be validated in an actual deployed browser.
 
-## Version control and release discovery
+## Repository layout
 
-The file `scripts/versions.json` is the single configuration for release tag, Debian package version, Ranuts revision, and converter version and SHA-256 pins. For this test, **do not change the converter version or hashes without independently inspecting the new package**.
+- `.github/workflows/eurooffice-poc.yml` — CI download/build/verify/deploy workflow.
+- `site/index.html`, `site/app.css`, `site/app.js` — full-page Word shell.
+- `site/editor-core.mjs` — pure DOCX/PDF signature, filename, and iframe message validation helpers.
+- `site/blank.docx` — valid initial A4 Word document (not a synthetic editor placeholder).
+- `scripts/versions.json` — exact upstream and converter version pins and checksums.
+- `scripts/build-poc.sh` — source assembly and packaging pipeline.
+- `scripts/resolve-eurooffice-deb.mjs` — release asset metadata resolver; avoids filename assumptions.
+- `scripts/vendor/` — integration and verified Modern Light patch.
+- `scripts/package-site.mjs`, `scripts/verify-site.mjs` — GitHub Pages asset rewriting and deployment verification.
+- `tests/` — source invariants, file helpers, archive, converter and package regression tests.
+- `LICENSES/` — preserved source and third-party license information.
 
-`scripts/resolve-eurooffice-deb.mjs` uses GitHub's release metadata for the exact tag `v9.3.5`, selecting exactly one official AMD64 `.deb`. It does not assume that the upstream package is named `euro-office-documentserver_9.3.5_amd64.deb`; upstream has changed build suffixes in the past. The script rejects ambiguity or untrusted asset URLs. After the download, `dpkg-deb -f` verifies the package name, final `9.3.5` version (allowing a Debian revision suffix), and AMD64 architecture. If the GitHub API supplies an asset SHA-256 digest, it is verified; the observed SHA-256 is always logged. Optionally set the Actions repository variable `EUROOFFICE_DEB_SHA256` to a known, trusted 64-character SHA-256 for an additional check.
+## Local validation
 
-The converter is also checked **before** building Vite, **after** Vite, and **after** static packaging. Old Ranuts `.br` files are removed and cannot overwrite the canonical converter, preserving the v4 fix for the `Import #0 "env"` error. This safeguards converter consistency, *not* editor/converter cross-version compatibility.
+On a computer with Node.js installed, run:
 
-## Expected failure modes
+```sh
+node --test tests/*.test.mjs
+bash -n scripts/build-poc.sh
+node --check site/app.js
+node --check site/editor-core.mjs
+```
 
-| First failing step or message | Interpretation / next action |
-|---|---|
-| `RELEASE RESOLUTION FAILED` | GitHub API unavailable, no matching official AMD64 `.deb`, or multiple candidates. Check the release; do not bypass the fail-closed check. |
-| Debian control version mismatch | Release asset may be mislabeled or built from a different version. Retain the log and investigate before using it. |
-| `npm pack` fails | Converter package unavailable. See manual mirror fallback below. |
-| `git apply --check` | The pinned Ranuts checkout does not match the existing patch. |
-| `INCOMPATIBLE Euro-Office web-apps bundle` | Official v9.3.5 changed an internal webpack/minified symbol expected by the old offline adapter. Adapter source work is required. |
-| Transplant references missing files | EuroOffice's final package layout differs from the RC. Inspect the genuine release package rather than adding placeholder files. |
-| `Incompatible x2t WASM/JS pair` / SHA mismatch | Downloaded converter is different from the known RC pair; do not disable verification. |
-| Failed DOCX/PDF workflow despite green build | Runtime editor/adapter/converter incompatibility, which CI static tests cannot prove away. Preserve the current v4 site. |
+These checks validate source, protocol guards, templates and packaging; they do not execute the several-hundred-megabyte upstream build. Running `bash scripts/build-poc.sh` requires a checkout of the exact pinned Ranuts revision at `.work/ranuts`, Debian tooling, pnpm and remote access to download the `.deb` and converter.
 
-### Manual fallback if the converter npm archive disappears
+## Security and limitations
 
-In the **test repository**, create a GitHub Release with tag `editor-inputs`. Upload the **actual original archive** named `eurooffice-sdkjs-common-9.3.5-rc.1.build.1.tgz` to that release, then rerun Actions. The workflow tries this exact filename if `npm pack` fails. Do not fabricate a converter archive, remove digests or use the unrelated Ranuts `x2t.wasm.br` file.
+The top-level document shell enforces source and origin matching for editor messages. Only validated DOCX/PDF output is downloaded. The runtime uses an `iframe` but **does not sandbox the same-origin editor**; that is necessary for the inherited ONLYOFFICE/Ranuts integration. Review this threat model before any hospital deployment. Do not assume a browser-only deployment guarantees data privacy: third-party fonts, extensions, future code changes and upstream dependencies require verification. No server-side access control, document audit history, Supabase persistence, collaborative editing or document-sharing workflow is supplied.
 
-## Testing checklist
+Opening a new document after changing the current document asks for confirmation. Browser close/refresh warnings are best-effort, not data recovery. Name changes affect downloaded filenames only; they do not rename any server record.
 
-After the GitHub Actions build and deployment succeed:
-
-1. Use **Check deployed converter assets** and copy the diagnostic result.
-2. Open a **fictional** DOCX with headings, paragraphs, lists and a table. Confirm pages actually render; an "open acknowledged" event alone is not enough.
-3. Edit text, invoke Save, export DOCX and reopen the export to inspect the actual text and layout.
-4. Export PDF, open it in a PDF viewer and verify layout, not merely the `%PDF-` header.
-5. Test read-only/editable toggles and repeated document opens.
-6. Watch browser Console/Network for incorrect SDK paths, converter `.wasm` imports and uncaught exceptions.
-
-A green build means the static package was assembled and structural checks passed. **It does not certify that official v9.3.5 works with the third-party RC converter.**
-
-## License and attribution
-
-Preserve `LICENSES/`, the upstream Ranuts `LICENSE` and `NOTICE` copied into the distribution, and the generated `PROTOTYPE-NOTICES.txt`. The third-party browser integration and the official editors are based on AGPL-licensed software. This experimental distribution is not approved for clinical deployment. Review corresponding-source and attribution requirements before wider redistribution.
-
-## Local checks performed on this ZIP
-
-The source-level tests (`node --test tests/*.test.mjs`), syntax checks (`bash -n scripts/build-poc.sh`, `python3 -m py_compile ...`) and simulated Pages packaging tests can run without downloads. The entire 500+ MB Debian build and browser-level DOCX/PDF operations **could not be run in this environment due to unavailable outbound network access**. The first GitHub Actions run remains the actual compatibility test.
+The complete release preserves third-party legal notices. Review AGPL and other license obligations before hosting or redistributing edited components.

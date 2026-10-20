@@ -1,0 +1,56 @@
+:root {
+  font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  color: #202936;
+  background: #e9edf2;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; width: 100%; margin: 0; overflow: hidden; }
+button, input { font: inherit; }
+button { -webkit-tap-highlight-color: transparent; }
+[hidden] { display: none !important; }
+.app { height: 100%; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+.appbar {
+  flex: 0 0 auto; min-height: 66px; display: flex; align-items: center; gap: 24px;
+  padding: 10px 22px; background: #fff; border-bottom: 1px solid #dce2ea;
+  box-shadow: 0 1px 2px rgba(23, 37, 56, 0.04); position: relative; z-index: 2;
+}
+.brand { display: flex; flex: none; gap: 10px; align-items: center; }
+.brandMark { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 8px; background: #245caa; color: #fff; font-size: 22px; font-weight: 750; line-height: 1; }
+.brandName { color: #1f344f; font-size: 16px; font-weight: 750; letter-spacing: -.35px; }
+.brandDivider { height: 25px; border-left: 1px solid #d8e0e8; margin-left: 6px; }
+.documentIdentity { display: flex; align-items: center; min-width: 130px; flex: 1; gap: 9px; }
+.documentIcon { color: #567088; width: 24px; height: 24px; flex: none; }
+.documentText { min-width: 0; display: flex; flex-direction: column; justify-content: center; }
+#documentTitle { width: min(100%, 460px); font-size: 15px; font-weight: 650; color: #26364b; border: 1px solid transparent; border-radius: 5px; background: transparent; padding: 1px 5px; text-overflow: ellipsis; }
+#documentTitle:not(:disabled):hover { background: #f3f6fa; border-color: #e0e8ef; }
+#documentTitle:not(:disabled):focus-visible { outline: 2px solid #79a7e1; outline-offset: 0; background: #fff; }
+#documentTitle:disabled { opacity: 1; }
+.documentSubtitle { font-size: 11px; color: #6b7a8a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-left: 5px; max-width: 100%; }
+.documentSubtitle.error { color: #b52630; }
+.documentSubtitle.modified { color: #94600e; }
+.actions { display: flex; align-items: center; flex: none; gap: 7px; }
+.action { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 9px 12px; min-height: 38px; cursor: pointer; border: 1px solid transparent; border-radius: 7px; background: transparent; color: #314660; font-weight: 600; white-space: nowrap; transition: background-color .12s, border-color .12s; }
+.action:hover:not(:disabled) { background: #edf3f9; border-color: #dbe5f1; }
+.action:focus-visible, .retry:focus-visible { outline: 3px solid #74a8e5; outline-offset: 2px; }
+.action:disabled { opacity: .42; cursor: default; }
+.action svg { flex: none; width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.action.primary { color: #fff; background: #245caa; border-color: #245caa; }
+.action.primary:hover:not(:disabled) { background: #194d96; border-color: #194d96; }
+.actionDivider { height: 24px; margin: 0 4px; border-left: 1px solid #dce2ea; }
+.workspace { flex: 1; display: flex; flex-direction: column; min-height: 0; min-width: 0; position: relative; overflow: hidden; background: #e9edf2; }
+#editor { flex: 1 1 auto; display: block; width: 100%; height: 100%; min-height: 0; border: none; background: #fff; }
+.loading { position: absolute; z-index: 1; inset: 0; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 11px; padding: 24px; background: #f1f4f8; text-align: center; }
+.loading strong { color: #243750; font-size: 18px; font-weight: 650; }
+.loading p { margin: 0; color: #718195; font-size: 13px; max-width: 420px; }
+.loaderIcon { display: grid; place-items: center; width: 88px; height: 90px; }
+.loaderPage { width: 54px; height: 70px; border-radius: 4px; background: #fff; box-shadow: 0 5px 20px #27415c1c; border: 1px solid #dae2ec; position: relative; }
+.loaderPage::before, .loaderPage::after { content: ""; display: block; height: 5px; position: absolute; left: 12px; right: 12px; border-radius: 2px; background: #bbcad9; }
+.loaderPage::before { top: 20px; } .loaderPage::after { top: 33px; right: 20px; }
+.retry { cursor: pointer; color: #fff; background: #245caa; border: none; border-radius: 6px; padding: 9px 18px; font-weight: 600; }
+.dropOverlay { position: fixed; inset: 0; z-index: 99; background: rgba(233, 240, 249, .92); padding: 20px; display: grid; place-items: center; pointer-events: auto; }
+.dropInner { border-radius: 12px; border: 3px dashed #6599cc; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; color: #245caa; }
+.dropInner svg { height: 56px; width: 56px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.dropInner strong { font-size: 19px; }.dropInner span { color: #536c87; }
+@media (max-width: 960px) { .appbar { gap: 11px; padding: 8px 12px; } .brandName { display: none; } .brandDivider { margin-left: 0; }.action { padding: 8px; } .action span { display: none; }.actions { gap: 3px; } #documentTitle { width: 100%; } }
+@media (max-width: 520px) { .appbar { min-height: 55px; } .brandMark { width: 29px; height: 29px; font-size: 19px; } .brandDivider { display: none; } .documentIcon { display: none; } .action { padding: 7px; } .action svg { width: 17px; height: 17px; }.actionDivider { margin: 0 2px; } .documentSubtitle { font-size: 10px; } }
