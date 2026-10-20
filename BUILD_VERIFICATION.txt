@@ -1,0 +1,22 @@
+EUROOFFICE-FIRST WASM EXPERIMENT -- VERIFICATION RECORD
+Date: 2026-10-20
+Repository type: GitHub Actions build experiment, unofficial.
+
+Local automated tests: 45 passed, 0 failed (node --test tests/*.test.mjs)
+Additional checks: bash -n scripts/*.sh, python3 -m py_compile scripts/*.py,
+JavaScript syntax checks (node --check), JSON patch manifest parsing.
+Partial-clone test: a real local Git repository verified that sparse checkout
+of the pinned build-tool file list excludes the bundled /core source tree.
+
+Coverage: official source identity; clean git tree; staged-only patching;
+SHA256 and allowlist validation; builder stage adapter structure; release
+asset and Debian metadata identification; ABI/source provenance policies;
+Git ref identity; Pages asset packaging and converter integrity.
+
+NOT TESTED: actual upstream EuroOffice v9.3.5 compilation with emsdk and
+full Docker stack; downloading the large official .deb in GitHub Actions;
+real in-browser DOCX/PDF rendering and conversion; hospital hosting.
+The full build may fail from genuine C++ compatibility or resource limits.
+Do not treat a green local test suite as successful end-to-end compilation.
+
+Old mass merge/port scripts intentionally removed. No converter binary included.

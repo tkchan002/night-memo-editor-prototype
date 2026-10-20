@@ -9,8 +9,13 @@ if(wasm.subarray(0,4).toString('hex')!=='0061736d')throw Error('Invalid WASM mag
 const imports=[...new Set(WebAssembly.Module.imports(new WebAssembly.Module(wasm)).map(x=>x.module))];
 if(imports.length!==1 || imports[0]!=='a')throw Error(`Unexpected WASM ABI imports ${JSON.stringify(imports)}; loader patch needed`);
 if(!/var imports\s*=\s*\{["']a["']\s*:\s*wasmImports/.test(js))throw Error('Generated JS does not provide the expected a import namespace');
-const manifest={releaseTag:process.env.EO_RELEASE_TAG||'',coreCommit:readFileSync('.work/official-core-commit.txt','utf8').trim(),
+const stage=JSON.parse(readFileSync('.work/official-core-staging.json','utf8'));
+const recipe=JSON.parse(readFileSync('.work/build-recipe-report.json','utf8'));
+if(stage.sourceMode!=='official-eurooffice-first' || stage.cryptpadModifiedCoreImported ||
+   recipe.modifiedCryptpadCoreImported || !recipe.builderOnly)throw Error('Invalid EuroOffice-first source provenance');
+const manifest={sourceMode:'official-eurooffice-first', patches:stage.patches,
+  buildRecipeDockerSha256:recipe.adaptedDockerfileSha256, releaseTag:process.env.EO_RELEASE_TAG||'',coreCommit:readFileSync('.work/official-core-commit.txt','utf8').trim(),
   wasmSha256:sha(wasm),jsSha256:sha(js),importModule:'a',buildRecipe:'cryptpad/onlyoffice-x2t-wasm@95f775fd3c42fae9e9af66ca072d3da3763e6c76'};
-if(!/^v\d/.test(manifest.releaseTag)||!/^[a-f0-9]{40}$/.test(manifest.coreCommit))throw Error('Release source metadata absent');
+if(stage.officialCoreCommit!==manifest.coreCommit || !/^v\d/.test(manifest.releaseTag)||!/^[a-f0-9]{40}$/.test(manifest.coreCommit))throw Error('Release source metadata absent');
 writeFileSync('.work/converter-manifest.json',JSON.stringify(manifest,null,2)+'\n');
 console.log('Matching converter built from core',manifest.coreCommit,'WASM sha256',manifest.wasmSha256);

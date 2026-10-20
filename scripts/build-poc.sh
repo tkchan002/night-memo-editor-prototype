@@ -46,12 +46,11 @@ dpkg-deb --fsys-tarfile "$DEB" | tar -x -C "$EO" \
 for p in "$EO_ROOT/sdkjs/word/sdk-all-min.js" "$EO_ROOT/web-apps/apps/documenteditor/main/app.js"; do
   [[ -s "$p" ]] || { echo "Missing from official release: $p"; exit 1; }
 done
-# Discover EXACT core gitlink from the tagged DocumentServer source.
-# Do not use core/main, core/latest, an estimated matching version, or ONLYOFFICE upstream.
-bash "$ROOT/scripts/prepare-release-core.sh"
-# CryptPad's Emscripten adaptation is ported to that source in a strict patching step.
-# It may fail for future releases. This is correct; never substitute RC1 converter.
-bash "$ROOT/scripts/build-matching-wasm.sh"
+# The official-source converter was compiled and validated in an earlier CI
+# step. Reusing it prevents accidental version or source changes after download.
+[[ -s "$WORK/converter-manifest.json" ]] || { echo 'Missing compiled official converter manifest'; exit 1; }
+[[ -s "$WORK/official-core-staging.json" ]] || { echo 'Missing official-source staging provenance'; exit 1; }
+[[ -s "$WORK/official-core-commit.txt" ]] || { echo 'Missing official core SHA'; exit 1; }
 X2T="$WORK/matching-converter"
 node "$ROOT/scripts/check-converter-pair.mjs" "$X2T"
 # Preserve the tested Ranuts browser integration while upgrading the engine.

@@ -1,33 +1,64 @@
 #!/usr/bin/env bash
-# Builds matching x2t (not the older RC1 WASM) via CryptPad's documented
-# Emscripten Docker recipe after strict source patch porting.
+# EuroOffice-first: exact release core + individually approved local patches.
+# CryptPad is a PINNED COMPILER RECIPE ONLY, never the source of core files.
 set -Eeuo pipefail
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"; cd "$ROOT"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
 WORK="$ROOT/.work"
+OFFICIAL="$WORK/official-source/core"
 RECIPE="$WORK/cryptpad-wasm-recipe"
-# Known recipe revision from the already verified @kreijstal publisher scripts.
-# The preflight performs a non-mutating three-way merge against the exact
-# official core and writes full diagnostics when incompatible.
-bash "$ROOT/scripts/preflight-wasm-port.sh"
-# Replace the recipe's bundled core with the exact release core PLUS the ported
-# WebAssembly adjustments. Retain the recipe build tooling and Emscripten flags.
-rm -rf "$RECIPE/core"
-mkdir -p "$RECIPE/core"
-cp -a "$WORK/official-source/core/." "$RECIPE/core/"
-# Drop nested Git metadata to keep build context stable and much smaller.
-rm -rf "$RECIPE/core/.git"
-python3 "$ROOT/scripts/apply-wasm-port.py" "$RECIPE/core" "$WORK/wasm-port-report.json"
-# BuildKit compiles the actual matching core. Isolated output stage copies ONLY
-# the two browser converter artifacts, never native Document Server executables.
-cp "$ROOT/scripts/converter-output.Dockerfile" "$RECIPE/EuroOffice-converter.Dockerfile"
-# BuildKit reads extended Dockerfile, including COPY rules defined by CryptPad.
-# Source is vetted by an explicit commit; Dockerfile is not fetched unpinned.
-python3 "$ROOT/scripts/combine-dockerfile.py" "$RECIPE/Dockerfile" "$RECIPE/EuroOffice-converter.Dockerfile"
-mkdir -p "$WORK/matching-converter"
-docker buildx build --progress=plain --target eurooffice-converter-export \
-  --output "type=local,dest=$WORK/matching-converter" \
-  --file "$RECIPE/EuroOffice-converter.Dockerfile" "$RECIPE"
-for f in x2t.js x2t.wasm; do
-  [[ -s "$WORK/matching-converter/$f" ]] || { echo "Missing built converter: $f"; exit 1; }
+EXPECTED="$(cat "$WORK/official-core-commit.txt")"
+RECIPE_SHA='95f775fd3c42fae9e9af66ca072d3da3763e6c76'
+[[ "$(git -C "$OFFICIAL" rev-parse HEAD)" == "$EXPECTED" ]] || {
+  echo 'Official EuroOffice core checkout changed' >&2; exit 1;
+}
+if [[ ! -d "$RECIPE/.git" ]]; then
+  # Sparse partial clone fetches build tools, not the giant bundled modified
+  # CryptPad /core source tree. Source always comes from EuroOffice gitlink.
+  git clone --filter=blob:none --no-checkout \
+    https://github.com/cryptpad/onlyoffice-x2t-wasm.git "$RECIPE"
+  git -C "$RECIPE" sparse-checkout init --no-cone
+  git -C "$RECIPE" sparse-checkout set --no-cone \
+    '/Dockerfile' '/embuild.sh' '/pre-js.js' '/wrap-main.cpp' '/test.js'
+fi
+git -C "$RECIPE" checkout --detach "$RECIPE_SHA"
+for file in Dockerfile embuild.sh pre-js.js wrap-main.cpp test.js; do
+  [[ -s "$RECIPE/$file" ]] || { echo "Pinned CryptPad compiler recipe missing $file" >&2; exit 1; }
 done
-node "$ROOT/scripts/create-converter-manifest.mjs" "$WORK/matching-converter"
+[[ "$(git -C "$RECIPE" rev-parse HEAD)" == "$RECIPE_SHA" ]] || exit 1
+# The bundled modified core must be REMOVED and not copied into the build.
+rm -rf "$RECIPE/core"
+python3 scripts/stage-official-core.py \
+  --source "$OFFICIAL" --output "$RECIPE/core" \
+  --core-sha "$EXPECTED" \
+  --manifest "$ROOT/patches/manifest.json" --patches-dir "$ROOT/patches" \
+  --report "$WORK/official-core-staging.json"
+python3 scripts/prepare-recipe.py \
+  --recipe "$RECIPE" \
+  --out "$RECIPE/EuroOffice-converter.Dockerfile" \
+  --report "$WORK/build-recipe-report.json"
+mkdir -p "$WORK/matching-converter" "$WORK/diagnostics"
+record_failure() {
+  status=$?
+  if [[ -f "$WORK/docker-build.log" ]]; then
+    tail -n 1500 "$WORK/docker-build.log" > "$WORK/diagnostics/docker-build-tail.log" || true
+  fi
+  printf 'EuroOffice source build failed with status %s.
+Release: %s
+Core: %s
+' \
+    "$status" "${EO_RELEASE_TAG:-unknown}" "$EXPECTED" > "$WORK/diagnostics/failure.txt"
+}
+trap record_failure ERR
+# The pinned compiler is expensive; a failed Emscripten run is still an honest
+# compatibility result, not permission to silently import older C++ files.
+docker buildx build --progress=plain \
+  --target eurooffice-converter-export \
+  --output "type=local,dest=$WORK/matching-converter" \
+  --file "$RECIPE/EuroOffice-converter.Dockerfile" "$RECIPE" 2>&1 | tee "$WORK/docker-build.log"
+for name in x2t.js x2t.wasm; do
+  [[ -s "$WORK/matching-converter/$name" ]] || {
+    echo "Compiled converter missing $name" >&2; exit 1;
+  }
+done
+node scripts/create-converter-manifest.mjs "$WORK/matching-converter"

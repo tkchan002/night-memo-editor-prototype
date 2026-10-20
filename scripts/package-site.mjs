@@ -262,6 +262,7 @@ const meta = {
   upstreamReleaseAsset: releaseAssetName,
   officialReleaseAssetSha256: officialReleaseAssetSha256 || null,
   browserConverterVersion: releaseVersion,
+  converterSourceMode: testFixture ? 'official-eurooffice-first' : JSON.parse(await fs.readFile(resolve('.work/converter-manifest.json'),'utf8')).sourceMode,
   converterCoreCommit: testFixture ? 'fixture' : JSON.parse(await fs.readFile(resolve('.work/converter-manifest.json'),'utf8')).coreCommit,
   mixedVersionExperiment: false,
   description: `Experimental Word-only EuroOffice ${releaseTag} + matching x2t built from official release core; compatibility unverified. No patient data.`,
