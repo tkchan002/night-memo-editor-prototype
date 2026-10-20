@@ -92,6 +92,7 @@ jobs:
             .work/official-core-commit.txt
             .work/official-core-staging.json
             .work/build-recipe-report.json
+            .work/wasm-compat-report.json
             .work/diagnostics/
       - name: Publish readable build summary
         if: always()
@@ -100,12 +101,15 @@ jobs:
             echo '## EuroOffice-first WASM experiment'
             echo "- Release: ${EO_RELEASE_TAG:-not resolved}"
             echo "- Official core: $(cat .work/official-core-commit.txt 2>/dev/null || echo unavailable)"
-            echo '- C++ source: exact EuroOffice DocumentServer gitlink, never the older CryptPad modified core.'
-            echo '- Build recipe: pinned CryptPad toolchain with a separately documented Docker adapter.'
+            echo '- C++ source: exact EuroOffice DocumentServer gitlink; only three audited Docker-stage stubs are imported from the pinned CryptPad Git tree.'
+            echo '- Build recipe: pinned CryptPad toolchain with three explicit stub COPY instructions and a local Docker input audit.'
             echo '- No previous WASM binary is accepted as a fallback.'
             echo '- A failed compiler run is an unresolved upstream compatibility issue, not a successful converter.'
             if [ -f .work/official-core-staging.json ]; then
               python3 -c 'import json; x=json.load(open(".work/official-core-staging.json")); print("- Explicit EuroOffice source patches:", x["patchCount"])'
+            fi
+            if [ -f .work/wasm-compat-report.json ]; then
+              python3 -c 'import json; x=json.load(open(".work/wasm-compat-report.json")); print("- Pinned doctrenderer WASM compatibility files:", x["stubCount"])'
             fi
             if [ -f .work/diagnostics/docker-build-tail.log ]; then
               echo '- Compiler tail saved in **eurooffice-first-build-diagnostics** artifact (when uploaded).'

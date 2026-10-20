@@ -33,8 +33,16 @@ python3 scripts/stage-official-core.py \
   --core-sha "$EXPECTED" \
   --manifest "$ROOT/patches/manifest.json" --patches-dir "$ROOT/patches" \
   --report "$WORK/official-core-staging.json"
+# CryptPad's pinned Docker recipe requires three WASM-specific stub
+# implementations not present in the official EuroOffice core. Extract ONLY
+# those three tracked blobs from the pinned builder into a separate context
+# directory. The original EuroOffice source tree is never changed.
+python3 scripts/stage-wasm-compat.py \
+  --recipe "$RECIPE" --official-core "$RECIPE/core" \
+  --report "$WORK/wasm-compat-report.json"
 python3 scripts/prepare-recipe.py \
   --recipe "$RECIPE" \
+  --context "$RECIPE" \
   --out "$RECIPE/EuroOffice-converter.Dockerfile" \
   --report "$WORK/build-recipe-report.json"
 mkdir -p "$WORK/matching-converter" "$WORK/diagnostics"

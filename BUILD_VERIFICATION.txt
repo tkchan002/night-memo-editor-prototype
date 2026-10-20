@@ -1,22 +1,45 @@
-EUROOFFICE-FIRST WASM EXPERIMENT -- VERIFICATION RECORD
+EUROOFFICE-FIRST WASM EXPERIMENT -- DOCTRENDERER COPY FIX
 Date: 2026-10-20
-Repository type: GitHub Actions build experiment, unofficial.
+Source of failure: user-supplied eurooffice-first-build-diagnostics.zip
+Release: v9.3.5
+Official core: 5a33ce6c4a63387e8576c7e763b70cd971988b24
+Builder recipe: cryptpad/onlyoffice-x2t-wasm@95f775fd3c42fae9e9af66ca072d3da3763e6c76
 
-Local automated tests: 45 passed, 0 failed (node --test tests/*.test.mjs)
-Additional checks: bash -n scripts/*.sh, python3 -m py_compile scripts/*.py,
-JavaScript syntax checks (node --check), JSON patch manifest parsing.
-Partial-clone test: a real local Git repository verified that sparse checkout
-of the pinned build-tool file list excludes the bundled /core source tree.
+OBSERVED ERROR:
+Docker doctrenderer 2/11 attempted:
+  cp /core/DesktopEditor/doctrenderer/doctrenderer_empty.cpp /core/DesktopEditor/doctrenderer/doctrenderer.cpp
+Docker failed: 'cannot stat .../doctrenderer_empty.cpp: No such file or directory'.
+The old pinned recipe also expected docbuilder_empty.cpp and docbuilder_p_empty.cpp.
+These are CryptPad build-compatibility files missing from the official EuroOffice core.
 
-Coverage: official source identity; clean git tree; staged-only patching;
-SHA256 and allowlist validation; builder stage adapter structure; release
-asset and Debian metadata identification; ABI/source provenance policies;
-Git ref identity; Pages asset packaging and converter integrity.
+CORRECTION:
+- Retrieve only the three named stubs as Git blobs from the pinned CryptPad recipe
+  commit, without replacing the official core or checking out CryptPad's full
+  modified core source. Record Git blob IDs, byte counts and SHA-256 hashes.
+- Replace exactly the three obsolete Docker RUN cp commands with explicit Docker
+  COPY instructions from wasm-compat into the isolated doctrenderer build stage.
+- Verify all local Docker COPY input paths exist *before* invoking Docker.
+- Check converter-manifest compatibility source identities and hashes.
+- Preserve the three-stub provenance report in GitHub Actions failure artifacts
+  and summarize stub count on the run summary page.
 
-NOT TESTED: actual upstream EuroOffice v9.3.5 compilation with emsdk and
-full Docker stack; downloading the large official .deb in GitHub Actions;
-real in-browser DOCX/PDF rendering and conversion; hospital hosting.
-The full build may fail from genuine C++ compatibility or resource limits.
-Do not treat a green local test suite as successful end-to-end compilation.
+LOCAL VERIFICATION:
+- Full Node.js test run: 59 tests passed; 0 failures (concurrency=2).
+- Tests include real Git fixtures and sparse partial Git clone that retrieves
+  blobs not present in the sparse working tree via git show.
+- Tests include no source overwrite, exact three-file mapping, tampered/missing
+  blobs, missing official source, unsafe symlink, repeated-run safety, SHA
+  provenance, manifest forgery rejection and local Docker COPY preflight.
+- Bash syntax, Python syntax, JavaScript syntax passed.
+- Full test output: eurooffice_doctrenderer_fix_all_tests.log (separate file).
 
-Old mass merge/port scripts intentionally removed. No converter binary included.
+NOT TESTED:
+- Real EuroOffice v9.3.5 compiler/Docker build: Docker is not installed in
+  the local testing environment; source checkout is several gigabytes.
+- Stub/API compatibility with newer EuroOffice headers and all subsequent
+  compiler/linker/build stages.
+- Browser loading and real DOCX/PDF conversions.
+
+LIMITATION: The *observed missing-file cp failure* is addressed. This is not
+proof that the complete x2t.js/x2t.wasm build will succeed. New genuine
+source/toolchain failures should be investigated from the next diagnostic log.
