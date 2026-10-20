@@ -17,6 +17,23 @@ import { gzipSync, gunzipSync } from 'node:zlib';
 import { PINNED, examineConverter } from './check-converter-pair.mjs';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+// A resolved official release is required for a real build. The fixture path is
+// deliberately limited to simulated packaging tests, never GitHub Actions.
+const isFixture = process.env.POC_TEST_FIXTURE === '1';
+const releaseTag = process.env.EO_RELEASE_TAG || (isFixture ? 'v9.3.5' : '');
+if (!/^v\d+\.\d+\.\d+(?:-(?:rc|beta|alpha|hotfix)\.[A-Za-z0-9.-]+)?$/.test(releaseTag)) {
+  throw new Error('Official Euro-Office release not resolved. Run scripts/resolve-release.mjs first.');
+}
+const releaseVersion = releaseTag.slice(1);
+const releaseAssetName = process.env.EO_DEB_NAME || (isFixture ? `euro-office-documentserver_${releaseVersion}_amd64.deb` : '');
+if (releaseAssetName !== `euro-office-documentserver_${releaseVersion}_amd64.deb`) {
+  throw new Error('Released engine asset/version mismatch during packaging');
+}
+const officialReleaseAssetSha256 = process.env.EO_RELEASE_ASSET_SHA256 || '';
+if (officialReleaseAssetSha256 && !/^[a-f0-9]{64}$/.test(officialReleaseAssetSha256)) {
+  throw new Error('Invalid official Euro-Office release asset SHA256');
+}
+
 const source = resolve(process.argv[2] || '.work/ranuts/dist');
 const ranutsCheckout = resolve(process.env.RANUTS_SOURCE_ROOT || dirname(source));
 const destination = resolve(process.argv[3] || 'dist', 'office');
@@ -71,7 +88,7 @@ await fs.cp(legalDirectory, join(destination, 'LICENSES'), { recursive: true });
 await fs.writeFile(join(destination, 'PROTOTYPE-NOTICES.txt'),
   `This experimental browser editor is based on Ranuts/document commit ` +
   `1301bb8bdac9092c4eb88a6f2f4ff5080cec68bd and incorporates editor ` +
-  `components from Euro-Office DocumentServer v9.3.5-rc.1, with the ` +
+  `components from Euro-Office DocumentServer ${releaseTag}, with the ` +
   `@kreijstal/eurooffice 9.3.5-rc.1.build.1 browser integration.\n` +
   `The preserved Ranuts NOTICE records the original Ranuts distribution and ` +
   `does not alone describe the Euro-Office engine transplant.\n` +
@@ -239,7 +256,13 @@ const meta = {
   converterWasmSha256: pairing.wasmSha256,
   converterJsSha256: pairing.jsSha256,
   converterImports: pairing.importedModules,
-  description: 'Experimental Word-only EuroOffice 9.3.5-rc.1 + pinned Ranuts/document, standalone GitHub Pages prototype. Not for patient data.',
+  upstreamReleaseTag: releaseTag,
+  upstreamReleaseVersion: releaseVersion,
+  upstreamReleaseAsset: releaseAssetName,
+  officialReleaseAssetSha256: officialReleaseAssetSha256 || null,
+  browserConverterVersion: '9.3.5-rc.1.build.1',
+  mixedVersionExperiment: true,
+  description: `Experimental Word-only EuroOffice ${releaseTag} + pinned Ranuts/document; converter remains RC1. Compatibility unverified. No patient data.`,
 };
 await fs.writeFile(join(destination,'eurooffice-poc-build.json'),JSON.stringify(meta,null,2)+'\n');
 let bytes = 0, files = 0;

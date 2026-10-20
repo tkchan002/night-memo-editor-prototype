@@ -28,7 +28,7 @@ test('the site communicates using bounded origin/source-checked iframe messages'
 });
 test('build scripts pin source versions and validate converter digest',()=>{
  const shell=read('scripts/build-poc.sh');
- for(const value of ['1301bb8bdac9092c4eb88a6f2f4ff5080cec68bd','9.3.5-rc.1','sha256sum --check','git -C "$RANUTS" apply --check','--frozen-lockfile'])
+ for(const value of ['1301bb8bdac9092c4eb88a6f2f4ff5080cec68bd','EO_RELEASE_TAG','sha256sum --check','git -C "$RANUTS" apply --check','--frozen-lockfile'])
   assert.ok(shell.includes(value),`Missing reproducibility measure: ${value}`);
 });
 test('Pages packaging guards nested ONLYOFFICE editor paths and gzip stream',()=>{
@@ -75,4 +75,15 @@ test('stale Ranuts compressed converter is removed at source, build and deploy b
  assert.doesNotMatch(pkg,/brotliDecompressSync/);
  assert.match(pkg,/if \(!existsSync\(raw\)\)/);
  assert.match(read('scripts/verify-site.mjs'),/Stale x2t\.wasm\.br remains/);
+});
+
+
+test('official release discovery is decoupled from pinned RC1 converter and guards mixed versions',()=>{
+ const resolver=read('scripts/resolve-release.mjs');
+ for(const item of ['/releases','assets.filter','sha256:','prerelease','GITHUB_ENV'])
+   assert.ok(resolver.includes(item),`Missing official release guard: ${item}`);
+ const pkg=read('scripts/package-site.mjs');
+ assert.match(pkg,/mixedVersionExperiment: true/);
+ assert.match(pkg,/upstreamReleaseTag: releaseTag/);
+ assert.match(pkg,/browserConverterVersion: '9\.3\.5-rc\.1\.build\.1'/);
 });

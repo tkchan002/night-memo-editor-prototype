@@ -1,159 +1,69 @@
-# EuroOffice + Ranuts — browser-only proof of concept
+# EuroOffice × Ranuts — latest-official-release browser experiment
 
-**Experimental build; not an approved replacement for Nurse Memo. Do not upload or test real patient information.**
+**EXPERIMENTAL. Not for patient records or production use.** This repository tests whether the **latest official stable Euro-Office DocumentServer engine** can run inside the browser-only Ranuts/document integration. It is not affiliated with Euro-Office or Ranuts. Keep the existing successfully working 9.3.5-RC1 prototype in a **different GitHub repository** as your fallback.
 
-This repo contains **only scripts and a local-document test page**, not the 591 MB Euro-Office Debian package or the compiled Office applications. A GitHub Actions Ubuntu runner downloads the official pinned release, checks out the Ranuts source at the exact commit used by the third-party package publisher, and builds an independent, browser-only Word editor. It does **not** deploy any Supabase data, API keys, or Nurse Memo application code.
+## What automatically updates, and what does not
 
-## Steps — entirely through the GitHub website
+| Component | Selection |
+|---|---|
+| Official Euro-Office engine, web-apps, SDK | **Resolved from `Euro-Office/DocumentServer` GitHub `/releases/latest` on each workflow run**. Today this is v9.3.5. |
+| Official AMD64 `.deb` | Exact asset from that release's GitHub metadata; never construct a guessed URL |
+| Browser-only Ranuts/document base | Pinned commit `1301bb8bdac9092c4eb88a6f2f4ff5080cec68bd` |
+| Ranuts browser-only compatibility patch | Pinned from the third-party `@kreijstal/eurooffice@9.3.5-rc.1.build.1` package |
+| `x2t.js` and `x2t.wasm` (DOCX/PDF converter) | **Still pinned to verified 9.3.5 RC1 pair. NOT upgraded** |
 
-1. Extract `NurseMemo_EuroOffice_POC_GitHub_Ready.zip` on your computer. Do **not** upload the ZIP as a single file to the repository; GitHub does not automatically expand it.
-2. Visit <https://github.com/new> and create a repository named `nurse-memo-eurooffice-poc` with a `main` default branch. For an experimental public Pages site, use **fictional documents only**. If you choose private, Pages availability depends on your GitHub plan.
-3. In an empty new repository, click **uploading an existing file** (or **Add file → Upload files** if the repository is already initialized), and upload the **contents** of the extracted folder. Include the hidden `.github/workflows/eurooffice-poc.yml` directory; on macOS Finder, press **Command + Shift + .** to show hidden folders. If your browser will not upload a folder, use GitHub's **Add file → Create new file** and type its relative path to create each missing nested file.
-4. Under **Settings → Pages → Build and deployment**, choose **GitHub Actions** as the deployment source.
-5. Open **Actions → EuroOffice Browser-only Proof of Concept → Run workflow**. A push to `main` may also trigger a run automatically. The Actions run may consume significant time and temporary disk space because the source package is large. Watch the build logs.
-6. If the build **and** Pages deployment succeed, open the URL displayed for the `github-pages` environment (normally `https://YOUR-ACCOUNT.github.io/nurse-memo-eurooffice-poc/`).
-7. Select an entirely fictional `.docx` document and test Open, edit, Export DOCX, Export PDF, read-only and state. The harness logs protocol events without sending document contents to a backend. A successful load is **not** sufficient; verify the downloaded files and compare layout/pagination to Ranuts.
+**A build using latest Euro-Office editor components with the RC1 converter is a mixed-version compatibility experiment, not a fully matched latest release.** The editing engine and x2t exchange internal document representations; imports and SHA256 checks prove file integrity, **not** internal format compatibility. Test DOCX import, edit, reopen and PDF thoroughly. A matching stable-version WASM build would be needed for a fully updated browser editor.
 
-### What GitHub Actions does
+The workflow intentionally **stops** if the official asset is missing, a signature/patch no longer matches, the mixed converter is invalid, or the static output fails structural checks. It never silently falls back to RC1 editor components. A green GitHub Actions check also does not prove real-browser DOCX/PDF behavior.
 
-- Checks out `Ranuts/document` at `1301bb8bdac9092c4eb88a6f2f4ff5080cec68bd`.
-- Downloads the official Euro-Office `v9.3.5-rc.1` AMD64 Debian release directly into the runner (it is not installed as a server). The download URL is inside `scripts/build-poc.sh`. Optionally, set the repository Actions variable `EUROOFFICE_DEB_SHA256` to an independently verified release checksum. The runner always logs the downloaded SHA-256.
-- Extracts only `sdkjs`, `web-apps`, and `dictionaries`; uses the documented publisher transplant script and patches supplied with the uploaded `@kreijstal/eurooffice` package.
-- Gets the pinned converter package `@kreijstal/eurooffice-sdkjs-common@9.3.5-rc.1.build.1`. The two converter files have **hardcoded SHA-256 integrity checks** from your supplied npm archive. It does not use placeholder WASM files.
-- Builds Ranuts with a frozen pnpm lockfile; retains its browser-only Offline controller and iframe bridge.
-- Removes the incompatible original Ranuts `x2t.wasm.br` before compilation, installs the verified EuroOffice `x2t.wasm`/`x2t.js` pair, and reinstalls it after Vite builds. Packaging never decompresses stale `.br` over the verified raw file.
-- Copies the pinned Ranuts source-tree `LICENSE` and `NOTICE` into the static editor (Vite does not place these in `dist`), alongside the Euro-Office and font third-party notices.
-- Packages the Word-only output under `/nurse-memo-eurooffice-poc/office/`, with static path corrections, a raw `.wasm` fallback and a compressed gzip streaming loader (GitHub Pages cannot set `Content-Encoding: br` for `.wasm.br`). Removes unrelated spreadsheet and presentation engines.
-- Verifies existence of the browser bridge, DOCX engine, WASM, font files and the static site before deploying with GitHub Pages.
+## Browser-only setup — separate test repository
 
-## If the converter's npm package becomes unavailable
+1. Go to <https://github.com/new>. Create a new repository, e.g. `night-memo-editor-latest-test` (prefer **Public** if you need GitHub Pages on your account). **Do not use or overwrite your working `night-memo-editor-prototype` repo.**
+2. Extract this ZIP on your computer. On GitHub choose **Add file → Upload files** and upload the extracted **contents**, retaining folder structure including `.github/workflows/eurooffice-latest.yml`. Mac Finder shortcut **Command + Shift + .** reveals the `.github` folder. Do not upload the ZIP itself.
+3. In the new repository open **Settings → Pages → Build and deployment** and choose **GitHub Actions**.
+4. Open **Actions → EuroOffice Latest Stable - Browser-only Experiment → Run workflow**. Leave `release_tag` **blank** to resolve the newest stable release automatically. Or enter e.g. `v9.3.5` to test a specific official tag. Uploading the files to `main` also starts a run using latest stable.
+5. The Ubuntu GitHub runner downloads the large official `.deb` directly. **You do not need to upload the 600 MB package, install anything locally, or connect GitHub to ChatGPT.**
+6. When the workflow completes, check its **job summary** and `dist/office/eurooffice-poc-build.json` for the selected engine and pinned converter versions. Open the new repository's GitHub Pages URL.
+7. Click **Check deployed converter assets**, then open a **fictional** `.docx`, edit its tables and text, export DOCX and PDF, reopen the exported DOCX, compare PDF pagination and formatting, and try read-only mode. The test page displays the two versions separately.
 
-Use the **browser-only fallback**. In your new GitHub repo, open **Releases → Draft a new release** and create the tag `editor-inputs` (name it *Editor build inputs*). Attach the original **`eurooffice-sdkjs-common-9.3.5-rc.1.build.1.tgz`** already uploaded to ChatGPT, then publish the release. (The archive is approximately 45 MB; a release asset is more appropriate than a normal Git commit.) Rerun Actions. The workflow tries this exact release asset when `npm pack` fails. No font packages are required for this path.
+### Version selection semantics
 
-**Do not upload the 600 MB `.deb`**. The runner downloads it. Do not add any credentials or patient files to the repository.
+`/releases/latest` returns the latest published **non-prerelease** GitHub Release. Each workflow run resolves it afresh; builds are reproducible at the *resolved version*, but not permanently pinned to a fixed version across separate runs. The selected tag/asset is printed in Actions and embedded in output metadata. Use `release_tag` when you want to repeat a particular version. **This workflow does not automatically run when Euro-Office publishes a release**; it looks up the latest when you run it or push files.
 
-## If Actions fails
+### Authenticity and checks
 
-Report the **first failed step** and its actual error, not only the last `Process completed with exit code 1` line. Known possible failures include:
+The release resolver checks the official `Euro-Office/DocumentServer` GitHub API, rejects unexpected asset hosts/paths, verifies the release tag and filename, and uses the asset SHA-256 `digest` from GitHub metadata **when available**. If GitHub exposes no digest, it prints a warning and records a downloaded SHA-256, but that checksum alone is not independent verification. You can set the repository variable `EUROOFFICE_DEB_SHA256` to an independently verified checksum. The RC1 converter's exact previously checked SHA256 digests are always required and both converter assets must use matching WASM imports.
 
-| Error / step | Interpretation |
-| --- | --- |
-| Checkout exact Ranuts source | The pinned commit could not be fetched or the repo was moved. The script does not silently substitute another revision. |
-| Download official release | GitHub's release download failed or exceeded the runner's capacity. Check the URL, runner quota and network. |
-| `npm pack` and missing converter | The third-party package is unpublished; use the release-asset fallback above. |
-| SHA256 mismatch | The downloaded converter is different from the inspected archive. Do **not** disable the check. |
-| `git apply --check` | The pinned upstream source no longer matches the publisher's patch. |
-| `eurooffice-into-ranuts.py` | The source of the Offline controller or a target engine asset changed. No generic text replacement is attempted. |
-| `Required NOTICE not found` | The pinned Ranuts checkout unexpectedly has no `NOTICE`; packaging deliberately stops rather than deploy without the attribution text. |
-| `Upstream build lacks LICENSE` | Indicates an older version of `scripts/package-site.mjs`; replace it with the corrected file. `LICENSE` is not a required Vite build output. |
-| `Incompatible x2t WASM/JS pair` | In an older prototype, `package-site.mjs` overwrote the verified converter by decompressing a stale `.br` file. Use the corrected v4 files and retain the integrity checks. |
-| `x2t` loader patch | Browser WASM loader did not match the known structure, so packaging refused to produce a broken editor. |
-| Site over 900 MiB | The Word-only static output exceeded the conservative Pages size guard. No incomplete site is deployed. |
-| Editor loads but export fails | A **runtime incompatibility**, requiring browser debugging and potentially a newer or corrected offline bridge. A green Actions tick alone is not proof of compatibility. |
+### What happens when the release changes
 
-## Acceptance criteria
+If a newer version (e.g. v9.3.6 or v9.4.x) introduces different SDK structures or an incompatible internal document format, the transplant or browser runtime may fail. That is an expected and useful experimental outcome; do **not** disable the integrity tests or rewrite engine APIs blindly. The next engineering task would be adapting the browser-only controller and rebuilding `x2t` from the matching tagged Euro-Office core source.
 
-1. Open a **fictional** Nurse Memo-style DOCX with headers, tables and several formatting styles.
-2. Edit text; export and reopen DOCX without corruption or missing text.
-3. Export PDF; confirm `%PDF-` signature and verify page size/pagination visually.
-4. Toggle genuine read-only mode, then editable mode.
-5. Test toolbar Save and the host-side export buttons, which have different event paths.
-6. Compare output font substitution and layout to the existing pinned Ranuts editor.
-7. Test repeated loads, long documents and memory consumption on the same browsers used by the hospital.
+### Missing converter package fallback
 
-If any criterion fails, keep the current Nurse Memo editor. No files in this PoC automatically modify Nurse Memo.
+The build downloads the previously confirmed `@kreijstal/eurooffice-sdkjs-common@9.3.5-rc.1.build.1`. If it is no longer available from npm, use the original archive you already possess: in your **new test repository**, create a GitHub Release with tag `editor-inputs` and attach **`eurooffice-sdkjs-common-9.3.5-rc.1.build.1.tgz`**. The build has an exact-name fallback for that asset. Do not upload the `.tgz` into the Git source directory. Never upload clinical files or credentials.
 
-## Source / licensing
+## Troubleshooting
 
-The editor merges pinned [Ranuts/document](https://github.com/Ranuts/document) sources with the official [Euro-Office DocumentServer](https://github.com/Euro-Office/DocumentServer/releases/tag/v9.3.5-rc.1) binaries. The transplant script and `.patch` are unmodified copies of `build/eurooffice-into-ranuts.py` and `build/ranuts-document.patch` from `@kreijstal/eurooffice@9.3.5-rc.1.build.1`, supplied by the user. These are source-level integration materials derived from AGPL-licensed components. Their inclusion here does not replace upstream notices, licenses, or source availability duties; review AGPL and third-party font license compliance before any institutional use.
+- **Resolve release fails:** Latest stable release missing or unexpected `.deb` asset. Check official <https://github.com/Euro-Office/DocumentServer/releases> and send the first error. Do not guess an asset URL.
+- **Download or digest fails:** Official `.deb` inaccessible or different from its advertised SHA256. Stop and investigate.
+- **Transplant fails:** The publisher's RC1 offline patch probably no longer matches the newer compiled editor. This requires a source-level compatibility update, not disabling the guard.
+- **WASM/JS pair fails:** Keep the verified matching JS/WASM. The earlier Ranuts `env`/WASI build must never overwrite it.
+- **DOCX opens but fails export or loses formatting:** This likely indicates a *different-version editor/converter compatibility problem*. Provide the test document only if fictional, and the diagnostic log.
+- **Workflow succeeds but editor cannot open:** Inspect browser console and network errors, then compare exported files with the known-working RC1 test.
 
-The official `.deb` release is a community test release. The third-party npm converter is not a separately verified official Euro-Office distribution. It is pinned for this prototype, not approved for production.
+## Files and licensing
 
-## Environment limitations and verification status
+- `scripts/resolve-release.mjs`: official GitHub stable-release selection; supports optional manual tag.
+- `scripts/build-poc.sh`: versions, official `.deb` extraction, compatibility patches, pinned RC1 converter and full Vite build.
+- `scripts/vendor/`: pinned author-supplied Ranuts patch and Euro-Office transplant script.
+- `scripts/package-site.mjs`: Word-only GitHub Pages packaging, license notices, safe static paths and converter integrity.
+- `scripts/verify-site.mjs`: published site checks and version metadata.
+- `site/`: standalone browser-only fictional DOCX test UI.
+- `tests/`: deterministic release selection, security checks, converter ABI and publishing regression tests.
+- `.github/workflows/eurooffice-latest.yml`: independent test build and deployment.
 
-The ZIP has been syntax-checked and its workflow/scripts reviewed against the uploaded source archives. **A full build and browser-level DOCX/PDF edit/export have not yet been successfully run in this environment**, since outbound access to the official large release is blocked here. The first GitHub Actions run is therefore a real integration test, not a guaranteed deployment. See the first failed step if it does not complete.
+This hybrid redistributes or derives from AGPL-covered Ranuts and Euro-Office components. Preserve the relevant copyright notices, corresponding source, build modifications and required license materials if distributing compiled releases. Consult appropriate reviewers before any clinical use. This GitHub Pages prototype must use fictional documents only.
 
+## Current verification status
 
-## Confirmed packaging failure fixed in v4 (`env` / `wasi_snapshot_preview1`)
-
-The failed v3 GitHub Actions log established the actual root cause: although
-`build-poc.sh` copied the correct converter into Ranuts `dist/`,
-`package-site.mjs` subsequently decompressed `dist/sdkjs/common/wasm/x2t/x2t.wasm.br`
-**on top of** the correct raw `x2t.wasm`. That stale compressed file is from
-Ranuts and imports `env`/`wasi_snapshot_preview1`, while the pinned EuroOffice
-`x2t.js` expects imports from `a`. The protective check correctly stopped the
-broken build.
-
-The v4 fix keeps the pinned raw converter authoritative at **three boundaries**:
-source `public/`, generated Vite `dist/`, and published Pages `dist/office/`.
-It removes the old compressed asset, never rehydrates it into the raw path,
-recreates `x2t.wasm.gz` from the verified raw bytes, and validates the
-finished JS/WASM pair and its import namespace. The browser should use the
-hash-versioned URLs created by the existing loader patch.
-
-We reproduced the previous overwrite with a deliberately incompatible `.br`
-in automated tests, and separately tested packaging using the **real uploaded
-EuroOffice WASM and JS bytes**. These tests do not replace a full GitHub Actions
-build or real-browser DOCX/PDF testing.
-
-### Applying v4 using GitHub's web interface
-
-If you already deployed v3, download the **v4 changed-files ZIP** from the
-ChatGPT response. Extract it and replace these files at their existing paths:
-
-- `scripts/build-poc.sh`
-- `scripts/package-site.mjs`
-- `scripts/verify-site.mjs`
-- `tests/package-smoke.test.mjs`
-- `tests/source-invariants.test.mjs`
-- `README.md`
-
-Commit the replacements to `main`, wait for the Actions run to complete,
-then use **Check deployed converter assets** on the Pages prototype. Test a
-*fictional* DOCX and both DOCX/PDF exports. Do not change the main Nurse Memo
-application unless these operations work.
-
-## Converter import error (`Import #0 "env"`)
-
-In the first deployed proof of concept, the Word interface loaded, but DOCX
-opening failed with `X2T module failed to instantiate: ... Import #0 "env"`.
-The pinned npm converter's verified WASM instead imports namespace `a` and
-its matching JavaScript glue supplies `a`. This error is consistent with
-wrong or stale bytes being used at runtime; it is not evidence that the DOCX
-file is corrupt. The precise cause of the remote mismatch has **not yet**
-been confirmed.
-
-This version copies the verified converter pair into the final Vite output
-*after* the build, verifies its SHA-256 and WebAssembly import namespace
-before packaging and after packaging, and cache-busts the JavaScript/WASM
-paths. The test page also includes a **Check deployed converter assets** button
-that checks the exact bytes served by GitHub Pages. Run this button first.
-
-If the integrity preflight succeeds but the editor still fails with `env`,
-the loader may still be fetching a *different* resource at runtime (or a service
-worker may have cached one). Copy the diagnostic events and share the browser
-Console's failing WebAssembly URL. Do not attempt to modify the document file.
-The demo's `document:opened` acknowledgment alone is not proof that the
-converter successfully rendered or saved the DOCX.
-
-Only update the standalone prototype, never clinical Nurse Memo, until a
-real DOCX is opened and exported to both DOCX and PDF successfully.
-
-### Updating from the previously deployed GitHub Pages prototype (v3 historical instructions)
-
-The earlier v3 instructions below are superseded by the v4 directions above.
-Download the small v3 replacement archive, extract it, and update only the
-listed files in the same relative paths in your GitHub repository. The
-workflow file does not need to change. GitHub Actions should automatically
-start on the `main` branch. Do not upload any `.tgz`, `.deb`, patient data, or
-large editor binaries to the Git repository.
-
-Once the new Pages deployment completes, open the prototype page and choose
-**Check deployed converter assets** before choosing a fictional DOCX. A
-successful integrity check proves only that GitHub Pages served the expected
-converter bytes; it does not prove that the editor fully supports the DOCX or
-PDF workflow.
-
-If the check fails, copy the diagnostic log. If it passes but DOCX opening
-still displays `Import #0 "env"`, share the browser Console error and Network
-request URL for the WASM asset. We must then trace the actual loader path.
+The supplied source and tests were checked locally, and the packaging workflow has synthetic smoke tests. **The full newest-release download and browser DOCX/PDF round trip are not verified in the authoring environment.** They must run on your new GitHub Actions runner and browser. Your successful RC1 prototype is the reference baseline.

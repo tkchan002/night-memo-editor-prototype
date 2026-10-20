@@ -18,18 +18,33 @@ if [[ "$(git -C "$RANUTS" rev-parse HEAD)" != '1301bb8bdac9092c4eb88a6f2f4ff5080
   exit 1
 fi
 
-DEB="$DOWNLOAD/euro-office-documentserver_9.3.5-rc.1_amd64.deb"
-URL='https://github.com/Euro-Office/DocumentServer/releases/download/v9.3.5-rc.1/euro-office-documentserver_9.3.5-rc.1_amd64.deb'
+# Selection is resolved from the official GitHub Releases API by the workflow.
+# Never invent a version, download a nightly, or silently fall back to RC1.
+: "${EO_RELEASE_TAG:?Run scripts/resolve-release.mjs first}"
+: "${EO_RELEASE_VERSION:?Missing resolved version}"
+: "${EO_DEB_URL:?Missing official release asset URL}"
+: "${EO_DEB_NAME:?Missing official release asset name}"
+[[ "$EO_RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-.][a-zA-Z0-9.]+)?$ ]] || { echo 'Invalid resolved release tag' >&2; exit 1; }
+[[ "$EO_DEB_NAME" == "euro-office-documentserver_${EO_RELEASE_VERSION}_amd64.deb" ]] || { echo 'Release asset name/version mismatch' >&2; exit 1; }
+[[ "$EO_DEB_URL" == "https://github.com/Euro-Office/DocumentServer/releases/download/${EO_RELEASE_TAG}/${EO_DEB_NAME}" ]] || { echo 'Unexpected official download URL' >&2; exit 1; }
+DEB="$DOWNLOAD/$EO_DEB_NAME"
 if [[ ! -s "$DEB" ]]; then
-  echo 'Downloading the official Euro-Office DocumentServer .deb (large; GitHub runner only).'
-  curl --fail --location --retry 3 --retry-delay 5 --connect-timeout 30 --max-time 1800 --output "$DEB" "$URL"
+  echo "Downloading official Euro-Office ${EO_RELEASE_TAG} .deb from the resolved release."
+  curl --fail --location --retry 3 --retry-delay 5 --connect-timeout 30 --max-time 1800 --output "$DEB" "$EO_DEB_URL"
 fi
 [[ -s "$DEB" ]] || { echo 'ERROR: .deb download is empty' >&2; exit 1; }
-# Optional additional release checksum supplied by the user/IT. Do not invent a digest.
+if [[ -n "${EO_RELEASE_ASSET_SHA256:-}" ]]; then
+  echo "${EO_RELEASE_ASSET_SHA256}  ${DEB}" | sha256sum --check --status || { echo 'ERROR: Official release asset SHA256 mismatch.' >&2; exit 1; }
+  echo 'PASS: downloaded release asset matches official GitHub SHA256 digest.'
+else
+  echo 'WARNING: GitHub asset metadata had no digest; recorded SHA256 is informational, not independently authenticated.'
+fi
 if [[ -n "${EUROOFFICE_DEB_SHA256:-}" ]]; then
-  echo "${EUROOFFICE_DEB_SHA256}  ${DEB}" | sha256sum --check --status || { echo 'ERROR: .deb SHA256 mismatch.' >&2; exit 1; }
+  echo "${EUROOFFICE_DEB_SHA256}  ${DEB}" | sha256sum --check --status || { echo 'ERROR: manually configured .deb SHA256 mismatch.' >&2; exit 1; }
 fi
 sha256sum "$DEB" | tee "$DOWNLOAD/eurooffice-deb-sha256.txt"
+echo "Official editor version: ${EO_RELEASE_TAG}"
+echo 'Browser converter version: 9.3.5-rc.1.build.1 (matching stable converter not available; mixed-version experiment).'
 
 EO_ROOT="$EO/var/www/euro-office/documentserver"
 if [[ ! -d "$EO_ROOT/web-apps" ]]; then
