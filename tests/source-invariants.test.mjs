@@ -17,13 +17,16 @@ test('publisher patch provides iframe events and path-aware x2t worker',()=>{
  for (const value of ['document:user-save','document:modified','document:saved','WORKER_URL','BASE_PATH'])
    assert.ok(patch.includes(value),`Missing bridge compatibility: ${value}`);
 });
-test('embedded EuroOffice always starts in Modern Light without changing non-embedded Ranuts theme',()=>{
+test('embedded Modern Light is applied by checked transformer, not a fragile git hunk',()=>{
  const patch=read('scripts/vendor/ranuts-document.patch');
- assert.match(patch,/diff --git a\/lib\/onlyoffice\/ui-theme\.ts b\/lib\/onlyoffice\/ui-theme\.ts/);
- assert.match(patch,/\+const EMBED_UI_THEME = 'theme-white';/);
- assert.match(patch,/\+  if \(isEmbeddedEditor\(\)\) return EMBED_UI_THEME;/);
- assert.match(patch,/\+if \(typeof document !== 'undefined'.*!isEmbeddedEditor\(\)\)/);
- assert.match(patch,/export const DEFAULT_UI_THEME = 'theme-classic-light';/);
+ const transformer=read('scripts/configure-embedded-theme.py');
+ assert.doesNotMatch(patch,/diff --git a\/lib\/onlyoffice\/ui-theme\.ts b\/lib\/onlyoffice\/ui-theme\.ts/);
+ assert.match(transformer,/EMBED_UI_THEME = 'theme-white'/);
+ assert.match(transformer,/if \(isEmbeddedEditor\(\)\) return EMBED_UI_THEME/);
+ assert.match(transformer,/!isEmbeddedEditor\(\)/);
+ assert.match(read('scripts/build-poc.sh'), /configure-embedded-theme\.py" --check/);
+ assert.match(read('scripts/build-poc.sh'), /configure-embedded-theme\.py" --apply/);
+ assert.match(read('.github/workflows/eurooffice-poc.yml'), /Verify vendor patch and Modern Light against exact Ranuts checkout/);
  assert.doesNotMatch(read('site/app.js'), /localStorage\.(?:setItem|removeItem|clear)\(/);
 });
 test('Word shell keeps origin/source-checked messages and verified converter preflight',()=>{

@@ -26,6 +26,12 @@ CONVERTER_NAME="$(version_field converter.npmName)"
 [[ "$(git -C "$RANUTS" rev-parse HEAD)" == "$RANUTS_PIN" ]] || {
   echo 'ERROR: Ranuts commit disagrees with versions.json; refusing to patch.' >&2; exit 1;
 }
+# Cheap deterministic preflight, BEFORE downloading ~590 MB EuroOffice input.
+# Ensure BOTH the shared vendor patch and the theme transformer accept the
+# exact pinned Ranuts checkout rather than merely inspecting patch text.
+printf 'Preflight: verify vendor patch and embedded Modern Light against pinned Ranuts source\n'
+git -C "$RANUTS" apply --check "$ROOT/scripts/vendor/ranuts-document.patch"
+python3 "$ROOT/scripts/configure-embedded-theme.py" --check "$RANUTS/lib/onlyoffice/ui-theme.ts"
 
 # Resolve asset metadata for the EXACT official release tag, not a guessed filename.
 node "$ROOT/scripts/resolve-eurooffice-deb.mjs" > "$DOWNLOAD/release-asset.json"
@@ -119,6 +125,7 @@ echo "$(version_field converter.jsSha256)  $X2T/x2t.js" | sha256sum --check --st
 printf 'Checking author-provided Ranuts patch against pinned upstream\n'
 git -C "$RANUTS" apply --check "$ROOT/scripts/vendor/ranuts-document.patch"
 git -C "$RANUTS" apply "$ROOT/scripts/vendor/ranuts-document.patch"
+python3 "$ROOT/scripts/configure-embedded-theme.py" --apply "$RANUTS/lib/onlyoffice/ui-theme.ts"
 
 printf 'Applying the author-provided browser-only engine transplant\n'
 python3 "$ROOT/scripts/vendor/eurooffice-into-ranuts.py" "$EO_ROOT" "$RANUTS"

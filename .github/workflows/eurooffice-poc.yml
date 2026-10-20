@@ -45,6 +45,10 @@ jobs:
         with:
           version: '11.4.0'
           run_install: false
+      - name: Verify vendor patch and Modern Light against exact Ranuts checkout
+        run: |
+          git -C .work/ranuts apply --check "$PWD/scripts/vendor/ranuts-document.patch"
+          python3 scripts/configure-embedded-theme.py --check .work/ranuts/lib/onlyoffice/ui-theme.ts
       - name: Run Word editor regression tests
         run: |
           bash -n scripts/build-poc.sh
