@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, chmodSync, statSync} from 'node:fs';
+import {mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, chmodSync, statSync, symlinkSync, readlinkSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join, dirname} from 'node:path';
 import {spawnSync} from 'node:child_process';
@@ -194,4 +194,193 @@ test('unchanged Git symlinks are not mistaken for source merge conflicts', () =>
     invoke(['python3','scripts/apply-wasm-port.py',c,r]);
     assert.equal(readFileSync(join(c,'x.cpp'),'utf8'),'cryptpad\n');
   }finally{rmSync(tmp,{recursive:true,force:true})}
+});
+
+// Real Git mode-120000 fixtures: the old tests covered only symlinks whose Git
+// objects were unchanged. These exercise the production failure's changed-link
+// branch, including safety, idempotence and conflicts.
+function initRepoWithLinks(path, files, links={}) {
+  initRepo(path, files);
+  for (const [name, link] of Object.entries(links)) {
+    mkdirSync(dirname(join(path, name)), {recursive: true});
+    symlinkSync(link, join(path, name));
+  }
+  if (Object.keys(links).length) {
+    invoke(['git','-C',path,'add','-A']);
+    invoke(['git','-C',path,'commit','-qm','track symlinks']);
+  }
+}
+function linkScenario({base={},mod={},official={},baseLinks={},modLinks={},officialLinks={}}, fn, portShouldSucceed=true) {
+  const tmp=mkdtempSync(join(tmpdir(),'eo-link-'));
+  try {
+    const a=join(tmp,'base'),b=join(tmp,'modified'),c=join(tmp,'target'),r=join(tmp,'report.json');
+    initRepoWithLinks(a, base, baseLinks);
+    initRepoWithLinks(b, mod, modLinks);
+    mkdirSync(c);
+    for (const [file, content] of Object.entries(official)) {
+      mkdirSync(dirname(join(c,file)), {recursive:true});
+      writeFileSync(join(c,file),content);
+    }
+    for (const [name, link] of Object.entries(officialLinks)) {
+      mkdirSync(dirname(join(c,name)), {recursive:true});
+      symlinkSync(link,join(c,name));
+    }
+    const port=invoke(['python3','scripts/port-wasm-changes.py',a,b,c,r],false);
+    if (portShouldSucceed) assert.equal(port.status,0,port.stderr+'\n'+port.stdout);
+    return fn({tmp,a,b,c,r,port,apply:()=>invoke(['python3','scripts/apply-wasm-port.py',c,r],false)});
+  } finally {rmSync(tmp,{recursive:true,force:true});}
+}
+
+const boostLink='Common/3dParty/boost/tools/1.72/arm64-linux-dynamic';
+const boostFile='Common/3dParty/boost/tools/1.72/x64-linux-dynamic/Makefile';
+
+test('REGRESSION: changed pinned CryptPad ARM64 boost symlink is staged and applied safely', () => {
+  const base={'X2tConverter/main.cpp':'before\n',[boostFile]:'all:\n'};
+  const mod={'X2tConverter/main.cpp':'wasm\n',[boostFile]:'all:\n'};
+  linkScenario({base,mod,official:base,modLinks:{[boostLink]:'x64-linux-dynamic/'}},({c,r,apply})=>{
+    const manifest=JSON.parse(readFileSync(r,'utf8'));
+    assert.equal(manifest.format,3);
+    assert.deepEqual(manifest.links,[boostLink]);
+    assert.equal(manifest.linkTargets[boostLink].cryptpad,'x64-linux-dynamic/');
+    assert.equal(apply().status,0);
+    assert.equal(readlinkSync(join(c,boostLink)),'x64-linux-dynamic/');
+    assert.equal(readFileSync(join(c,'X2tConverter/main.cpp'),'utf8'),'wasm\n');
+    const result=JSON.parse(readFileSync(join(tmpdirPlaceholder(r),'wasm-port-results.json')));
+    assert.equal(result.symlinkChangesPlanned,1);
+  });
+});
+function tmpdirPlaceholder(reportPath){return dirname(reportPath);}
+
+test('changed symlink can be already present in official source and rerun idempotently',()=>{
+  linkScenario({base:{'wasm.cpp':'old\n'},mod:{'wasm.cpp':'new\n'},official:{'wasm.cpp':'new\n'},
+    modLinks:{'src/link':'dest/'},officialLinks:{'src/link':'dest/'}},({c,r,apply})=>{
+    assert.equal(apply().status,0);
+    assert.equal(apply().status,0);
+    assert.equal(readlinkSync(join(c,'src/link')),'dest/');
+    assert.ok(JSON.parse(readFileSync(join(dirname(r),'wasm-port-results.json'))).alreadyPresent.includes('src/link'));
+  });
+});
+
+test('safe relative symlink retarget is applied from exact original target',()=>{
+  linkScenario({base:{'f.cpp':'a\n'},mod:{'f.cpp':'b\n'},official:{'f.cpp':'a\n'},
+    baseLinks:{'tools/link':'old/'},modLinks:{'tools/link':'new/'},officialLinks:{'tools/link':'old/'}},({c,apply})=>{
+    assert.equal(apply().status,0);
+    assert.equal(readlinkSync(join(c,'tools/link')),'new/');
+  });
+});
+
+test('safe symlink deletion applies, and is idempotent',()=>{
+  linkScenario({base:{'f.cpp':'a\n'},mod:{'f.cpp':'b\n'},official:{'f.cpp':'a\n'},
+    baseLinks:{'tools/link':'x/'},officialLinks:{'tools/link':'x/'}},({c,apply})=>{
+    assert.equal(apply().status,0);
+    assert.equal(existsSync(join(c,'tools/link')),false);
+    assert.equal(apply().status,0);
+  });
+});
+
+test('independently changed symlink conflicts without partially applying regular files',()=>{
+  linkScenario({base:{'f.cpp':'a\n'},mod:{'f.cpp':'b\n'},official:{'f.cpp':'a\n'},
+    baseLinks:{'tools/link':'old/'},modLinks:{'tools/link':'new/'},officialLinks:{'tools/link':'fork/'}},({c,r,apply})=>{
+    const p=apply();
+    assert.notEqual(p.status,0);
+    assert.match(p.stderr,/CONFLICT tools\/link/);
+    assert.equal(readlinkSync(join(c,'tools/link')),'fork/');
+    assert.equal(readFileSync(join(c,'f.cpp'),'utf8'),'a\n');
+    assert.equal(JSON.parse(readFileSync(join(dirname(r),'wasm-port-results.json'))).status,'conflict');
+  });
+});
+
+test('official regular file at a proposed link path conflicts; never overwritten',()=>{
+  linkScenario({base:{'f.cpp':'a\n'},mod:{'f.cpp':'b\n'},official:{'f.cpp':'a\n','tools/link':'official\n'},
+    modLinks:{'tools/link':'x/'}},({c,apply})=>{
+    assert.notEqual(apply().status,0);
+    assert.equal(readFileSync(join(c,'tools/link'),'utf8'),'official\n');
+    assert.equal(readFileSync(join(c,'f.cpp'),'utf8'),'a\n');
+  });
+});
+
+test('changed regular file cannot overwrite an unexpected official symlink',()=>{
+  linkScenario({base:{'f.cpp':'old\n'},mod:{'f.cpp':'new\n'},official:{},
+    officialLinks:{'f.cpp':'other-file'}},({c,r,apply})=>{
+    assert.notEqual(apply().status,0);
+    assert.equal(readlinkSync(join(c,'f.cpp')),'other-file');
+    assert.equal(JSON.parse(readFileSync(join(dirname(r),'wasm-port-results.json'))).status,'conflict');
+  });
+});
+
+test('file-to-symlink Git type changes still require explicit human review',()=>{
+  linkScenario({base:{'link':'old\n','f.cpp':'a\n'},mod:{'f.cpp':'b\n'},official:{'link':'old\n'},
+    modLinks:{'link':'f.cpp'}},({port})=>{
+    assert.notEqual(port.status,0);
+    assert.match(port.stderr,/File\/symlink type change requires manual review/);
+  },false);
+});
+
+test('symlink-to-file Git type changes still require explicit human review',()=>{
+  linkScenario({base:{'f.cpp':'a\n'},mod:{'f.cpp':'b\n','link':'replaced\n'},official:{'f.cpp':'a\n'},
+    baseLinks:{'link':'f.cpp'}},({port})=>{
+    assert.notEqual(port.status,0);
+    assert.match(port.stderr,/File\/symlink type change requires manual review/);
+  },false);
+});
+
+test('source symlink attempting to escape using relative traversal is refused at staging',()=>{
+  linkScenario({base:{'f.cpp':'a\n'},mod:{'f.cpp':'b\n'},official:{'f.cpp':'a\n'},
+    modLinks:{'sub/link':'../../../etc/passwd'}},({port})=>{
+    assert.notEqual(port.status,0);
+    assert.match(port.stderr,/Symlink escapes source tree/);
+  },false);
+});
+
+test('absolute source symlink is refused at staging',()=>{
+  linkScenario({base:{'f.cpp':'a\n'},mod:{'f.cpp':'b\n'},official:{'f.cpp':'a\n'},
+    modLinks:{'sub/link':'/etc/passwd'}},({port})=>{
+    assert.notEqual(port.status,0);
+    assert.match(port.stderr,/Unsafe symlink target/);
+  },false);
+});
+
+test('legitimate symlink using .. within source tree is allowed',()=>{
+  linkScenario({base:{'f.cpp':'a\n'},mod:{'f.cpp':'b\n'},official:{'f.cpp':'a\n'},
+    modLinks:{'sub/link':'../f.cpp'}},({c,apply})=>{
+    assert.equal(apply().status,0);
+    assert.equal(readlinkSync(join(c,'sub/link')),'../f.cpp');
+  });
+});
+
+test('preexisting parent directory symlink blocks modifications beneath it',()=>{
+  const tmp=mkdtempSync(join(tmpdir(),'eo-parent-'));
+  try {
+    const a=join(tmp,'base'),b=join(tmp,'modified'),c=join(tmp,'target'),r=join(tmp,'report.json');
+    initRepo(a,{'dir/f.cpp':'a\n'});initRepo(b,{'dir/f.cpp':'b\n'});
+    mkdirSync(c);mkdirSync(join(tmp,'external'));
+    symlinkSync(join(tmp,'external'),join(c,'dir'));
+    invoke(['python3','scripts/port-wasm-changes.py',a,b,c,r]);
+    const res=invoke(['python3','scripts/apply-wasm-port.py',c,r],false);
+    assert.notEqual(res.status,0);
+    assert.match(res.stderr,/Unexpected symlink within core source/);
+    assert.equal(existsSync(join(tmp,'external','f.cpp')),false);
+  }finally{rmSync(tmp,{recursive:true,force:true});}
+});
+
+test('a relative source link resolving outside via intermediate symlink is refused',()=>{
+  const tmp=mkdtempSync(join(tmpdir(),'eo-chain-'));
+  try {
+    const a=join(tmp,'base'),b=join(tmp,'modified'),c=join(tmp,'target'),r=join(tmp,'report.json');
+    initRepo(a,{'f.cpp':'a\n'});
+    initRepoWithLinks(b,{'f.cpp':'b\n'},{'sub/link':'redirect/f.txt'});
+    symlinkSync('/etc',join(b,'sub','redirect'));
+    mkdirSync(c);
+    const result=invoke(['python3','scripts/port-wasm-changes.py',a,b,c,r],false);
+    assert.notEqual(result.status,0);
+    assert.match(result.stderr,/resolves outside source tree/);
+  }finally{rmSync(tmp,{recursive:true,force:true});}
+});
+
+test('missing official link conflicts if upstream baseline expected it to exist',()=>{
+  linkScenario({base:{'f.cpp':'a\n'},mod:{'f.cpp':'b\n'},official:{'f.cpp':'a\n'},
+    baseLinks:{'tools/link':'before'},modLinks:{'tools/link':'after'}},({c,apply})=>{
+    assert.notEqual(apply().status,0);
+    assert.equal(readFileSync(join(c,'f.cpp'),'utf8'),'a\n');
+  });
 });
