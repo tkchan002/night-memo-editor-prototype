@@ -75,6 +75,18 @@ jobs:
       - name: Deploy experimental Pages site
         uses: actions/deploy-pages@v4
         id: deployment
+      - name: Preserve WASM source merge diagnostics if build fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eurooffice-wasm-port-diagnostics
+          if-no-files-found: ignore
+          retention-days: 14
+          include-hidden-files: true
+          path: |
+            .work/wasm-port-report.json
+            .work/wasm-port-results.json
+            .work/wasm-port/conflicts/
       - name: Summarize matched sources
         if: always()
         run: |

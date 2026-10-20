@@ -1,62 +1,132 @@
 #!/usr/bin/env python3
-"""Prepare a strict three-source port of CryptPad's Emscripten modifications.
+"""Stage a three-source x2t WASM port without constructing a giant text patch.
 
-Reference: ONLYOFFICE/core v9.3.0.140 (per CryptPad's README).
-Modified: cryptpad/onlyoffice-x2t-wasm core/ at pinned recipe revision.
-Target: *exact* Euro-Office core gitlink from selected DocumentServer release.
-
-Creates text patch + new source file overlay. No automatic overwrite of the target
-with an older core. Patches require zero fuzz. Refuses huge/unexpected diffs.
+BASELINE is ONLYOFFICE/core at the version documented by the pinned CryptPad
+recipe. MODIFIED is CryptPad's pinned /core subtree. OFFICIAL is the specific
+EuroOffice release's core. Only changed paths are staged; apply-wasm-port.py
+merges them against OFFICIAL without replacing its full source tree.
 """
-import difflib, hashlib, json, pathlib, shutil, subprocess, sys
-if len(sys.argv)!=5: raise SystemExit('usage: port-wasm-changes.py BASELINE MODIFIED OFFICIAL_CORE REPORT')
-base, modified, official, report=map(pathlib.Path,sys.argv[1:])
-work=report.parent/'wasm-port'; work.mkdir(exist_ok=True,parents=True)
-objects=work/'new'; objects.mkdir(exist_ok=True)
-patch=work/'core-changes.patch'
+import json
+import pathlib
+import shutil
+import subprocess
+import sys
+
+if len(sys.argv) != 5:
+    raise SystemExit('usage: port-wasm-changes.py BASELINE MODIFIED OFFICIAL_CORE REPORT')
+
+base, modified, official, report = (pathlib.Path(x).resolve() for x in sys.argv[1:])
+work = report.parent / 'wasm-port'
+old_dir, new_dir = work / 'baseline', work / 'cryptpad'
+
 
 def tracked(root):
-    # CryptPad's core is a git-tracked subdirectory, while baseline is a repo root.
-    result=subprocess.run(['git','-C',str(root),'ls-files','-z'],capture_output=True,check=True)
-    return {pathlib.Path(p.decode()) for p in result.stdout.split(b'\0') if p}
+    result = subprocess.run(
+        ['git', '-C', str(root), 'ls-files', '--stage', '-z'],
+        capture_output=True, check=True,
+    )
+    paths = {}
+    for record in result.stdout.split(b'\0'):
+        if not record:
+            continue
+        metadata, raw_path = record.split(b'\t', 1)
+        mode, object_id, _stage = metadata.decode('ascii').split(' ')
+        name = pathlib.Path(raw_path.decode('utf-8', 'surrogateescape'))
+        if name.is_absolute() or '..' in name.parts or not name.parts:
+            raise SystemExit(f'Unsafe tracked file: {name}')
+        if name in paths:
+            raise SystemExit(f'Unexpected staged conflict entry: {name}')
+        paths[name] = (mode, object_id)
+    return paths
 
-base_files=tracked(base)
-modified_files=tracked(modified)
-# cryptpad tracked source from repo subdir should be relative to /core.
-if not modified_files: raise SystemExit('CryptPad core source does not contain tracked files')
-new=[]; changed=[]; deleted=[]; skipped_binary=[]; diffs=[]; diff_bytes=0
-for rel in sorted(base_files|modified_files):
-    left=base/rel; right=modified/rel
-    a=left.read_bytes() if left.is_file() else None
-    b=right.read_bytes() if right.is_file() else None
-    if a==b:continue
-    if a is None:
-        if b'\0' in b: skipped_binary.append(str(rel));continue
-        output=objects/rel; output.parent.mkdir(parents=True,exist_ok=True);output.write_bytes(b)
-        new.append(str(rel));continue
-    if b is None:
-        deleted.append(str(rel));continue
-    if b'\0' in a[:8192] or b'\0' in b[:8192]:
-        skipped_binary.append(str(rel));continue
-    try:
-        old=a.decode('utf-8'); current=b.decode('utf-8')
-    except UnicodeDecodeError:
-        skipped_binary.append(str(rel));continue
-    if len(a)+len(b)>4_000_000: raise SystemExit(f'Refusing huge source delta for {rel}')
-    lines=list(difflib.unified_diff(old.splitlines(keepends=True),current.splitlines(keepends=True),
-      fromfile='a/'+str(rel),tofile='b/'+str(rel),n=3))
-    if lines:
-        diff=''.join(lines)
-        # Some source files are missing final LF; patch can fail safely.
-        diff_bytes+=len(diff.encode())
-        if diff_bytes>20_000_000:raise SystemExit('CryptPad delta exceeds 20 MB; requires manual review')
-        diffs.append(diff)
+
+def content(root, name, mode):
+    if mode is None or mode == '160000':
+        return None
+    if mode == '120000':
+        raise SystemExit(f'Symlink change requires manual review: {name}')
+    if mode not in ('100644', '100755'):
+        raise SystemExit(f'Unsupported Git mode {mode} for {name}')
+    source = root / name
+    if not source.is_file() or source.is_symlink():
+        raise SystemExit(f'Missing/non-regular tracked file: {source}')
+    return source.read_bytes()
+
+
+base_files = tracked(base)
+modified_files = tracked(modified)
+if not modified_files:
+    raise SystemExit('Pinned CryptPad core source contains no tracked files')
+
+# Re-running a port cannot leak stale files from an earlier run.
+if work.exists():
+    shutil.rmtree(work)
+old_dir.mkdir(parents=True)
+new_dir.mkdir(parents=True)
+
+changed, added, deleted, gitlinks = [], [], [], []
+file_modes = {}
+staged_bytes = 0
+for rel in sorted(set(base_files) | set(modified_files)):
+    old_entry = base_files.get(rel)
+    new_entry = modified_files.get(rel)
+    old_mode = old_entry[0] if old_entry else None
+    new_mode = new_entry[0] if new_entry else None
+    # Git index objects are immutable at the pinned source commits. Skip identical
+    # objects before reading files, especially unchanged symlinks/submodules.
+    if old_entry is not None and old_entry == new_entry:
+        if old_mode == '160000':
+            gitlinks.append(str(rel))
+        continue
+    if old_mode == '160000' or new_mode == '160000':
+        if old_entry != new_entry:
+            raise SystemExit(f'CryptPad modifies Git submodule pointer: {rel}; manual source review required')
+        gitlinks.append(str(rel))
+        continue
+    old = content(base, rel, old_mode)
+    new = content(modified, rel, new_mode)
+    if old == new and old_mode == new_mode:
+        continue
+    file_modes[str(rel)] = {'baseline': old_mode, 'cryptpad': new_mode}
+    if old is not None and new is not None:
         changed.append(str(rel))
-if not changed: raise SystemExit('No WASM adaptations detected; refusing to replace target core')
-patch.write_text(''.join(diffs))
-manifest={'baseline':'ONLYOFFICE/core v9.3.0.140','modified':'cryptpad/onlyoffice-x2t-wasm pinned subtree',
-          'changed':changed,'new':new,'deleted':deleted,'skippedBinary':skipped_binary,
-          'patchPath':str(patch),'newDir':str(objects),'coreTarget':str(official)}
-report.write_text(json.dumps(manifest,indent=2)+'\n')
-print(f'WASM delta: {len(changed)} modified text, {len(new)} added, {len(deleted)} deleted, {len(skipped_binary)} binary unchanged/not transplanted')
-print('NOTE: Source-level port is experimental; differences are checked before compilation.')
+    elif old is None and new is not None:
+        added.append(str(rel))
+    elif old is not None and new is None:
+        deleted.append(str(rel))
+    else:
+        raise SystemExit(f'Unsupported file-mode difference: {rel}')
+    staged_bytes += len(old or b'') + len(new or b'')
+    if staged_bytes > 300_000_000:
+        raise SystemExit('Source delta exceeds 300 MB; manual source-version review required')
+    if old is not None:
+        dest = old_dir / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(old)
+    if new is not None:
+        dest = new_dir / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(new)
+
+if not changed and not added and not deleted:
+    raise SystemExit('No CryptPad adaptations detected; source-port cannot proceed')
+
+manifest = {
+    'format': 2,
+    'baseline': 'ONLYOFFICE/core v9.3.0.140',
+    'modified': 'cryptpad/onlyoffice-x2t-wasm pinned subtree',
+    'coreTarget': str(official),
+    'baselineDir': str(old_dir),
+    'modifiedDir': str(new_dir),
+    'changed': changed,
+    'new': added,
+    'deleted': deleted,
+    'gitlinksUnmodified': gitlinks,
+    'stagedBytes': staged_bytes,
+    'fileModes': file_modes,
+}
+report.parent.mkdir(parents=True, exist_ok=True)
+report.write_text(json.dumps(manifest, indent=2) + '\n')
+print(f'Prepared three-way WASM port: {len(changed)} modified, {len(added)} added, '
+      f'{len(deleted)} deleted files; {staged_bytes:,} staged bytes')
+print('This is a source-port attempt, not proof that the resulting C++ can compile.')
