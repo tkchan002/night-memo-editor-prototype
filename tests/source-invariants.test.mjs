@@ -64,3 +64,15 @@ test('static test UI verifies deployed converter and does not mark document as r
  assert.match(js,/crypto\.subtle\.digest/);
  assert.match(js,/Open acknowledged; check rendered pages/);
 });
+
+
+test('stale Ranuts compressed converter is removed at source, build and deploy boundaries',()=>{
+ const sh=read('scripts/build-poc.sh');
+ assert.match(sh,/rm -f "\$RANUTS\/public\/\$CONVERTER_REL\/x2t\.wasm\.br"/);
+ assert.match(sh,/rm -f "\$RANUTS\/dist\/\$CONVERTER_REL\/x2t\.wasm\.br"/);
+ const pkg=read('scripts/package-site.mjs');
+ assert.match(pkg,/Removed legacy x2t\.wasm\.br/);
+ assert.doesNotMatch(pkg,/brotliDecompressSync/);
+ assert.match(pkg,/if \(!existsSync\(raw\)\)/);
+ assert.match(read('scripts/verify-site.mjs'),/Stale x2t\.wasm\.br remains/);
+});

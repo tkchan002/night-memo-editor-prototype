@@ -4,6 +4,7 @@ import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,existsSync,rmSync} from
 import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
 import {spawnSync} from 'node:child_process';
+import {brotliCompressSync, gunzipSync} from 'node:zlib';
 const repo=resolve(new URL('../',import.meta.url).pathname);
 function write(root,path,data) {
  const file=join(root,path); mkdirSync(resolve(file,'..'),{recursive:true});writeFileSync(file,data);
@@ -21,6 +22,11 @@ test('standalone Pages packaging uses project base, never rewrites nested index 
    // Real, tiny WASM fixture importing `a.f`, which matches the generated JS.
    const toyWasm=Buffer.from('0061736d01000000010401600000020701016101660000','hex');
    write(input,'sdkjs/common/wasm/x2t/x2t.wasm',toyWasm);
+   // Regression fixture for real October 19 failure: an older Ranuts .br
+   // imports env/WASI while the canonical editor JS+raw WASM import a.
+   const staleWasm=Buffer.from('0061736d0100000001040160000002090103656e7601660000','hex');
+   write(input,'sdkjs/common/wasm/x2t/x2t.wasm.br',brotliCompressSync(staleWasm));
+   write(input,'sdkjs/common/wasm/x2t/x2t.wasm.gz',Buffer.from('stale cache'));
    write(input,'sdkjs/common/wasm/x2t/x2t.js','var imports={"a":wasmImports};');
    write(input,'sdkjs/common/wasm/x2t/x2t_helper.js',[
      "this.WASM_PATH = '../../../../sdkjs/common/wasm/x2t/x2t.wasm.br';",
@@ -44,7 +50,13 @@ test('standalone Pages packaging uses project base, never rewrites nested index 
    const h=readFileSync(join(output,'office/editor.html'),'utf8');
    assert.match(h,/\/nurse-memo-eurooffice-poc\/office\/assets\/ui\.js/);
    assert.match(readFileSync(join(output,'office/web-apps/apps/api/documents/api.js'),'utf8'),/"\/index\.html"/);
-   assert.ok(existsSync(join(output,'office/sdkjs/common/wasm/x2t/x2t.wasm.gz')));
+   const published=join(output,'office/sdkjs/common/wasm/x2t');
+   assert.deepEqual(readFileSync(join(published,'x2t.wasm')),toyWasm,
+     'packaging must NOT overwrite pinned raw WASM with an incompatible .br');
+   assert.deepEqual(gunzipSync(readFileSync(join(published,'x2t.wasm.gz'))),toyWasm,
+     'new gzip must be generated from pinned raw WASM');
+   assert.ok(!existsSync(join(published,'x2t.wasm.br')),
+     'stale Brotli converter must not be deployed');
    assert.match(readFileSync(join(output,'office/sdkjs/common/wasm/x2t/x2t_helper.js'),'utf8'),/x2t.js\?v=/);
    assert.match(readFileSync(join(output,'office/sdkjs/common/wasm/x2t/x2t_helper.js'),'utf8'),/WASM_RAW_PATH/);
    assert.ok(!existsSync(join(output,'office/sdkjs/cell')));
@@ -65,5 +77,25 @@ test('packaging rejects missing original NOTICE rather than inventing a legal at
      {cwd:repo,env:{...process.env,GITHUB_REPOSITORY:'example/poc'},encoding:'utf8',timeout:25000});
    assert.notEqual(p.status,0);
    assert.match(p.stderr,/Required NOTICE not found/);
+ } finally {rmSync(temp,{recursive:true,force:true});}
+});
+
+
+test('packaging refuses to use a compressed converter when the pinned raw binary is absent',()=>{
+ const temp=mkdtempSync(join(tmpdir(),'eurooffice-br-only-'));
+ try {
+   const input=join(temp,'ranuts','dist'),output=join(temp,'output');
+   for(const f of ['index.html','editor.html','history.html'])write(input,f,'<html></html>');
+   write(join(temp,'ranuts'),'LICENSE','LICENSE');
+   write(join(temp,'ranuts'),'NOTICE','NOTICE');
+   write(input,'sdkjs/placeholder','x');
+   write(input,'assets/placeholder','x');
+   write(input,'web-apps/placeholder','x');
+   const wasi=Buffer.from('0061736d0100000001040160000002090103656e7601660000','hex');
+   write(input,'sdkjs/common/wasm/x2t/x2t.wasm.br',brotliCompressSync(wasi));
+   const p=spawnSync(process.execPath,['scripts/package-site.mjs',input,output],
+     {cwd:repo,env:{...process.env,GITHUB_REPOSITORY:'example/poc'},encoding:'utf8',timeout:25000});
+   assert.notEqual(p.status,0);
+   assert.match(p.stderr,/Missing pinned raw x2t\.wasm/);
  } finally {rmSync(temp,{recursive:true,force:true});}
 });

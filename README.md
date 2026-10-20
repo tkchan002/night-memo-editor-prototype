@@ -21,6 +21,7 @@ This repo contains **only scripts and a local-document test page**, not the 591 
 - Extracts only `sdkjs`, `web-apps`, and `dictionaries`; uses the documented publisher transplant script and patches supplied with the uploaded `@kreijstal/eurooffice` package.
 - Gets the pinned converter package `@kreijstal/eurooffice-sdkjs-common@9.3.5-rc.1.build.1`. The two converter files have **hardcoded SHA-256 integrity checks** from your supplied npm archive. It does not use placeholder WASM files.
 - Builds Ranuts with a frozen pnpm lockfile; retains its browser-only Offline controller and iframe bridge.
+- Removes the incompatible original Ranuts `x2t.wasm.br` before compilation, installs the verified EuroOffice `x2t.wasm`/`x2t.js` pair, and reinstalls it after Vite builds. Packaging never decompresses stale `.br` over the verified raw file.
 - Copies the pinned Ranuts source-tree `LICENSE` and `NOTICE` into the static editor (Vite does not place these in `dist`), alongside the Euro-Office and font third-party notices.
 - Packages the Word-only output under `/nurse-memo-eurooffice-poc/office/`, with static path corrections, a raw `.wasm` fallback and a compressed gzip streaming loader (GitHub Pages cannot set `Content-Encoding: br` for `.wasm.br`). Removes unrelated spreadsheet and presentation engines.
 - Verifies existence of the browser bridge, DOCX engine, WASM, font files and the static site before deploying with GitHub Pages.
@@ -45,6 +46,7 @@ Report the **first failed step** and its actual error, not only the last `Proces
 | `eurooffice-into-ranuts.py` | The source of the Offline controller or a target engine asset changed. No generic text replacement is attempted. |
 | `Required NOTICE not found` | The pinned Ranuts checkout unexpectedly has no `NOTICE`; packaging deliberately stops rather than deploy without the attribution text. |
 | `Upstream build lacks LICENSE` | Indicates an older version of `scripts/package-site.mjs`; replace it with the corrected file. `LICENSE` is not a required Vite build output. |
+| `Incompatible x2t WASM/JS pair` | In an older prototype, `package-site.mjs` overwrote the verified converter by decompressing a stale `.br` file. Use the corrected v4 files and retain the integrity checks. |
 | `x2t` loader patch | Browser WASM loader did not match the known structure, so packaging refused to produce a broken editor. |
 | Site over 900 MiB | The Word-only static output exceeded the conservative Pages size guard. No incomplete site is deployed. |
 | Editor loads but export fails | A **runtime incompatibility**, requiring browser debugging and potentially a newer or corrected offline bridge. A green Actions tick alone is not proof of compatibility. |
@@ -72,6 +74,45 @@ The official `.deb` release is a community test release. The third-party npm con
 The ZIP has been syntax-checked and its workflow/scripts reviewed against the uploaded source archives. **A full build and browser-level DOCX/PDF edit/export have not yet been successfully run in this environment**, since outbound access to the official large release is blocked here. The first GitHub Actions run is therefore a real integration test, not a guaranteed deployment. See the first failed step if it does not complete.
 
 
+## Confirmed packaging failure fixed in v4 (`env` / `wasi_snapshot_preview1`)
+
+The failed v3 GitHub Actions log established the actual root cause: although
+`build-poc.sh` copied the correct converter into Ranuts `dist/`,
+`package-site.mjs` subsequently decompressed `dist/sdkjs/common/wasm/x2t/x2t.wasm.br`
+**on top of** the correct raw `x2t.wasm`. That stale compressed file is from
+Ranuts and imports `env`/`wasi_snapshot_preview1`, while the pinned EuroOffice
+`x2t.js` expects imports from `a`. The protective check correctly stopped the
+broken build.
+
+The v4 fix keeps the pinned raw converter authoritative at **three boundaries**:
+source `public/`, generated Vite `dist/`, and published Pages `dist/office/`.
+It removes the old compressed asset, never rehydrates it into the raw path,
+recreates `x2t.wasm.gz` from the verified raw bytes, and validates the
+finished JS/WASM pair and its import namespace. The browser should use the
+hash-versioned URLs created by the existing loader patch.
+
+We reproduced the previous overwrite with a deliberately incompatible `.br`
+in automated tests, and separately tested packaging using the **real uploaded
+EuroOffice WASM and JS bytes**. These tests do not replace a full GitHub Actions
+build or real-browser DOCX/PDF testing.
+
+### Applying v4 using GitHub's web interface
+
+If you already deployed v3, download the **v4 changed-files ZIP** from the
+ChatGPT response. Extract it and replace these files at their existing paths:
+
+- `scripts/build-poc.sh`
+- `scripts/package-site.mjs`
+- `scripts/verify-site.mjs`
+- `tests/package-smoke.test.mjs`
+- `tests/source-invariants.test.mjs`
+- `README.md`
+
+Commit the replacements to `main`, wait for the Actions run to complete,
+then use **Check deployed converter assets** on the Pages prototype. Test a
+*fictional* DOCX and both DOCX/PDF exports. Do not change the main Nurse Memo
+application unless these operations work.
+
 ## Converter import error (`Import #0 "env"`)
 
 In the first deployed proof of concept, the Word interface loaded, but DOCX
@@ -89,7 +130,7 @@ paths. The test page also includes a **Check deployed converter assets** button
 that checks the exact bytes served by GitHub Pages. Run this button first.
 
 If the integrity preflight succeeds but the editor still fails with `env`,
-the loader may be fetching a *different* resource at runtime (or a service
+the loader may still be fetching a *different* resource at runtime (or a service
 worker may have cached one). Copy the diagnostic events and share the browser
 Console's failing WebAssembly URL. Do not attempt to modify the document file.
 The demo's `document:opened` acknowledgment alone is not proof that the
@@ -98,8 +139,9 @@ converter successfully rendered or saved the DOCX.
 Only update the standalone prototype, never clinical Nurse Memo, until a
 real DOCX is opened and exported to both DOCX and PDF successfully.
 
-### Updating from the previously deployed GitHub Pages prototype
+### Updating from the previously deployed GitHub Pages prototype (v3 historical instructions)
 
+The earlier v3 instructions below are superseded by the v4 directions above.
 Download the small v3 replacement archive, extract it, and update only the
 listed files in the same relative paths in your GitHub repository. The
 workflow file does not need to change. GitHub Actions should automatically

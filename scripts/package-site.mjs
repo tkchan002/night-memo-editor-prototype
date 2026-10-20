@@ -13,7 +13,7 @@
 import { existsSync, promises as fs } from 'node:fs';
 import { basename, dirname, extname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { brotliDecompressSync, gzipSync, gunzipSync } from 'node:zlib';
+import { gzipSync, gunzipSync } from 'node:zlib';
 import { PINNED, examineConverter } from './check-converter-pair.mjs';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -135,17 +135,27 @@ await walk(destination, async (path, name) => {
   scanned++;
 });
 
+// The *verified raw converter* is the sole source of truth. Earlier releases
+// accidentally decompressed a stale Ranuts x2t.wasm.br over the correct
+// EuroOffice x2t.wasm at this point, reintroducing WASI (`env`) imports and
+// breaking DOCX opening despite passing prior build checks.
 const packed = join(destination, 'sdkjs/common/wasm/x2t/x2t.wasm.br');
 const raw = join(destination, 'sdkjs/common/wasm/x2t/x2t.wasm');
+if (!existsSync(raw)) {
+  throw new Error('Missing pinned raw x2t.wasm; refusing to substitute x2t.wasm.br from another engine.');
+}
+if ((await fs.readFile(raw)).subarray(0,4).toString('hex') !== '0061736d') {
+  throw new Error('Invalid pinned raw x2t.wasm converter.');
+}
+// Delete the legacy compressed file even when it happens to be valid WASM:
+// it may have a different ABI and must never be a runtime fallback.
 if (existsSync(packed)) {
-  const wasm = brotliDecompressSync(await fs.readFile(packed));
-  if (wasm.subarray(0,4).toString('hex') !== '0061736d') throw new Error('Decompressed converter is not WebAssembly.');
-  await fs.writeFile(raw, wasm);
   await fs.rm(packed);
+  console.log('Removed legacy x2t.wasm.br; keeping the pinned raw EuroOffice WASM.');
 }
-if (!existsSync(raw) || (await fs.readFile(raw)).subarray(0,4).toString('hex') !== '0061736d') {
-  throw new Error('Missing or invalid raw x2t.wasm converter.');
-}
+// Any prebuilt .gz also predates the hash validation: discard and regenerate
+// it below, directly from the verified bytes.
+await fs.rm(`${raw}.gz`, { force: true });
 
 // GitHub Pages cannot supply Content-Encoding for a precompressed .br asset.
 // Send a much smaller gzip download instead, and decompress via the browser's

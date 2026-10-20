@@ -80,8 +80,15 @@ git -C "$RANUTS" apply "$ROOT/scripts/vendor/ranuts-document.patch"
 
 printf 'Applying the author-provided browser-only engine transplant\n'
 python3 "$ROOT/scripts/vendor/eurooffice-into-ranuts.py" "$EO_ROOT" "$RANUTS"
-install -Dm644 "$X2T/x2t.wasm" "$RANUTS/public/sdkjs/common/wasm/x2t/x2t.wasm"
-install -Dm644 "$X2T/x2t.js" "$RANUTS/public/sdkjs/common/wasm/x2t/x2t.js"
+# The original Ranuts source carries x2t.wasm.br built against an unrelated
+# WASI/`env` ABI.  The verified EuroOffice JS expects module `a`. Never leave
+# that precompressed file where Vite can copy it into the compiled distribution.
+CONVERTER_REL='sdkjs/common/wasm/x2t'
+install -Dm644 "$X2T/x2t.wasm" "$RANUTS/public/$CONVERTER_REL/x2t.wasm"
+install -Dm644 "$X2T/x2t.js" "$RANUTS/public/$CONVERTER_REL/x2t.js"
+rm -f "$RANUTS/public/$CONVERTER_REL/x2t.wasm.br" \
+      "$RANUTS/public/$CONVERTER_REL/x2t.wasm.gz"
+node "$ROOT/scripts/check-converter-pair.mjs" "$RANUTS/public/$CONVERTER_REL"
 
 node "$ROOT/scripts/check-transplant.mjs" "$RANUTS/public"
 
@@ -95,9 +102,13 @@ pnpm --dir "$RANUTS" run build
 # x2t pair at each boundary; copying before Vite alone did not prevent a
 # mismatched converter from appearing in the deployed runtime.
 node "$ROOT/scripts/check-converter-pair.mjs" "$X2T"
-install -Dm644 "$X2T/x2t.wasm" "$RANUTS/dist/sdkjs/common/wasm/x2t/x2t.wasm"
-install -Dm644 "$X2T/x2t.js" "$RANUTS/dist/sdkjs/common/wasm/x2t/x2t.js"
-node "$ROOT/scripts/check-converter-pair.mjs" "$RANUTS/dist/sdkjs/common/wasm/x2t"
+# Vite sometimes re-copies public/ files. Remove both old compressed variants
+# and reinstall the canonical pinned pair AFTER the build as well.
+rm -f "$RANUTS/dist/$CONVERTER_REL/x2t.wasm.br" \
+      "$RANUTS/dist/$CONVERTER_REL/x2t.wasm.gz"
+install -Dm644 "$X2T/x2t.wasm" "$RANUTS/dist/$CONVERTER_REL/x2t.wasm"
+install -Dm644 "$X2T/x2t.js" "$RANUTS/dist/$CONVERTER_REL/x2t.js"
+node "$ROOT/scripts/check-converter-pair.mjs" "$RANUTS/dist/$CONVERTER_REL"
 
 printf 'Packaging Word-only GitHub Pages build (no server)\n'
 node "$ROOT/scripts/package-site.mjs" "$RANUTS/dist" "$ROOT/dist"

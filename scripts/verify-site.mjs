@@ -19,6 +19,10 @@ for (const name of [
 ]) check(existsSync(join(root,name)),`Deployment missing: ${name}`);
 const wasm=readFileSync(join(office,'sdkjs/common/wasm/x2t/x2t.wasm'));
 check(wasm.subarray(0,4).toString('hex')==='0061736d','Invalid WASM binary');
+// The old Ranuts .br converter has a different import ABI and must not be
+// published: it caused successful builds to fail on document open.
+check(!existsSync(join(office,'sdkjs/common/wasm/x2t/x2t.wasm.br')),
+  'Stale x2t.wasm.br remains in deployed assets');
 const loader=readFileSync(join(office,'sdkjs/common/wasm/x2t/x2t_helper.js'),'utf8');
 check(loader.includes('DecompressionStream'), 'Gzip streaming loader patch missing');
 check(loader.includes('this.WASM_RAW_PATH'), 'Cache-busted x2t raw fallback missing');
