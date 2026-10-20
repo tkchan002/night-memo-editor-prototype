@@ -9,17 +9,22 @@ mkdir -p "$WORK/downloads" "$EO"
 : "${EO_RELEASE_VERSION:?Missing version}"
 : "${EO_DEB_NAME:?Missing .deb name}"
 : "${EO_DEB_URL:?Missing .deb url}"
+: "${EO_DEB_DOWNLOADED_SHA256:?Run scripts/select-release-deb.mjs first}"
 [[ "$EO_DEB_NAME" =~ ^[A-Za-z0-9_.+~-]+\.deb$ ]] || { echo 'Unsafe .deb filename'; exit 1; }
 [[ "$(git -C "$RANUTS" rev-parse HEAD)" == '1301bb8bdac9092c4eb88a6f2f4ff5080cec68bd' ]] || { echo 'Wrong Ranuts commit'; exit 1; }
 node --input-type=module <<'NODE'
 import {readFileSync} from 'node:fs';
 const m=JSON.parse(readFileSync('.work/release-selection.json'));
-for(const [env,key] of [['EO_RELEASE_TAG','tag'],['EO_DEB_NAME','name'],['EO_DEB_URL','url'],['EO_RELEASE_VERSION','version']]){
+for(const [env,key] of [['EO_RELEASE_TAG','tag'],['EO_DEB_NAME','name'],['EO_DEB_URL','url'],['EO_RELEASE_VERSION','version'],['EO_DEB_DOWNLOADED_SHA256','downloadedSha256']]){
   if(m[key]!==process.env[env])throw Error(`Release metadata changed at ${env}`);
 }
+if(m.packageName!=='euro-office-documentserver'||m.arch!=='amd64')throw Error('Selected Debian package metadata is not AMD64 EuroOffice');
 NODE
 DEB="$WORK/downloads/$EO_DEB_NAME"
-curl --fail --location --retry 3 --connect-timeout 30 --max-time 2400 -o "$DEB" "$EO_DEB_URL"
+# The verified file was downloaded and checked in the selection step. Do not
+# re-download a different package after release resolution.
+[[ -f "$DEB" ]] || { echo 'Missing preverified Debian package'; exit 1; }
+echo "${EO_DEB_DOWNLOADED_SHA256}  ${DEB}" | sha256sum -c -
 [[ -s "$DEB" ]] || { echo 'Empty package'; exit 1; }
 if [[ -n "${EO_RELEASE_ASSET_SHA256:-}" ]]; then
   echo "${EO_RELEASE_ASSET_SHA256}  ${DEB}" | sha256sum -c -

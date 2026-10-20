@@ -17,13 +17,15 @@ This repository is a **build experiment**, not a verified stable release. It att
 
 ## Version/source guarantee
 
-1. `scripts/resolve-release.mjs` retrieves GitHub's latest stable `Euro-Office/DocumentServer` release. Any unique, large `.deb` asset may be considered, irrespective of arbitrary filename. It refuses multiple candidates.
-2. `scripts/build-poc.sh` downloads the selected asset and uses `dpkg-deb` to verify the **internal package name, version and architecture**. Filename alone is not trusted. GitHub `sha256` digest is checked when provided.
-3. `scripts/prepare-release-core.sh` checks out the *same release tag* from the official DocumentServer repository and extracts its **exact `core` Git submodule commit**. It verifies the checked-out SHA.
-4. `scripts/port-wasm-changes.py` derives CryptPad's WASM source modifications by comparing its pinned `core` against the ONLYOFFICE `v9.3.0.140` baseline cited in CryptPad's documentation.
-5. `scripts/apply-wasm-port.py` attempts to port only these changes onto an isolated copy of the release-matched Euro-Office core, with **no fuzzy patching**. If source differences cannot be reconciled safely, the build **fails** rather than copying an old converter.
-6. `scripts/build-matching-wasm.sh` builds the modified matched source with the pinned CryptPad Dockerfile/Emscripten recipe. It extracts `x2t.js` and `x2t.wasm` directly from the same build, verifies their ABI and generates SHA-256 provenance.
-7. The pinned Ranuts browser integration and Euro-Office editor files are assembled. The converter binaries are installed AFTER the Ranuts build as well, preventing old `.wasm.br` from replacing the new converter. Packaging verifies the final hashes and deploys **only** verified static assets.
+1. `scripts/resolve-release.mjs` retrieves GitHub's latest stable `Euro-Office/DocumentServer` release and verifies the **official URL and optional SHA-256 digest** of every candidate `.deb`. It writes `.work/release-candidates.json`. It does **not** assume that the release contains only one Debian asset.
+2. Because this workflow runs on `ubuntu-24.04` (AMD64), it skips assets **clearly labeled ARM64**, while retaining unknown/renamed `.deb` packages for inspection. Filename architecture is only a download optimization, **never sufficient to accept the artifact**. A package renamed to `euro-office-new-very-very-new-real-new.deb` still works.
+3. The next step, `scripts/select-release-deb.mjs`, downloads the eligible assets, verifies downloaded size and GitHub SHA-256 if published, then uses `dpkg-deb` to read their **actual Package, Version and Architecture** fields. Exactly one package must be `euro-office-documentserver`, version matching the tag, and `amd64`. More than one match, no match, corrupt downloads or wrong identity all stop the build safely. If several files have unrecognizable names, each must be downloaded to identify its architecture, which may use additional bandwidth and temporary disk space.
+4. The selection is saved as `.work/release-selection.json`, and the verified `.deb` is reused in the next step. `scripts/build-poc.sh` checks the recorded SHA-256 again and does **not** download it again. Unneeded examined files are removed before compilation.
+5. `scripts/prepare-release-core.sh` checks out the *same release tag* from the official DocumentServer repository and extracts its **exact `core` Git submodule commit**. It verifies the checked-out SHA.
+6. `scripts/port-wasm-changes.py` derives CryptPad's WASM source modifications by comparing its pinned `core` against the ONLYOFFICE `v9.3.0.140` baseline cited in CryptPad's documentation.
+7. `scripts/apply-wasm-port.py` attempts to port only these changes onto an isolated copy of the release-matched Euro-Office core, with **no fuzzy patching**. If source differences cannot be reconciled safely, the build **fails** rather than copying an old converter.
+8. `scripts/build-matching-wasm.sh` builds the modified matched source with the pinned CryptPad Dockerfile/Emscripten recipe. It extracts `x2t.js` and `x2t.wasm` directly from the same build, verifies their ABI and generates SHA-256 provenance.
+9. The pinned Ranuts browser integration and Euro-Office editor files are assembled. The converter binaries are installed AFTER the Ranuts build as well, preventing old `.wasm.br` from replacing the new converter. Packaging verifies the final hashes and deploys **only** verified static assets.
 
 ## What is NOT guaranteed
 
@@ -37,8 +39,11 @@ This repository is a **build experiment**, not a verified stable release. It att
 
 | Failure | Meaning |
 |---|---|
-| `Expected exactly one large .deb` | GitHub release has no usable/unique Debian artifact. Listed filenames show what is available. |
-| `Unexpected Debian package identity` | The asset has the wrong internal package name, version or architecture. |
+| `No large .deb assets` | The selected GitHub release has no sufficiently large `.deb` attachment. |
+| `No possible amd64 Debian package` | All eligible `.deb` assets are explicitly labeled for a different CPU architecture. |
+| `Expected exactly one verified ... amd64 .deb` | Debian control metadata does not identify exactly one matching AMD64 EuroOffice package. Inspected package identities are printed. |
+| `Failed to download/inspect` | Download failed, declared file size or digest differs, or the `.deb` control section could not be read. |
+| `Unexpected Debian package identity` | Downstream validation found an unexpected internal package identity. The earlier selection stage also checks these fields. |
 | `Core checkout does not match release gitlink` | Cannot obtain the exact source used by official release. |
 | `WASM port does not apply cleanly` | The older Emscripten changes cannot safely be applied to the new core. A source-level port is necessary. No RC1 binary is used. |
 | Docker `No space left on device` / OOM | Standard GitHub runner insufficient for full C++ WASM compilation. Consider larger Linux runner. |
@@ -51,4 +56,4 @@ The editor incorporates code from [Ranuts/document](https://github.com/ranuts/do
 
 ## Tests in this source ZIP
 
-`node --test tests/*.test.mjs` checks release resolution, renamed `.deb` behavior, source version pinning, error guards, and the absence of the old RC1 binary path. Syntax checks cover shell scripts, Node scripts and the source-port Python files. **These are not end-to-end build, browser or licensing tests.**
+`node --test tests/*.test.mjs` checks dual-architecture release resolution, arbitrary filename fallback, Debian control-field matching, real small `.deb` inspection including file-size and digest rejection, source version pinning, error guards, and the absence of the old RC1 binary path. Syntax checks cover shell scripts, Node scripts and the source-port Python files. **These are not end-to-end build, browser or licensing tests.**
