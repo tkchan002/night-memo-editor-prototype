@@ -130,13 +130,6 @@ async function verifyConverter() {
     const metaResponse=await fetch(manifestUrl.href,{cache:'reload'});
     if (!metaResponse.ok) throw new Error(`Build metadata missing: HTTP ${metaResponse.status}`);
     const meta=await metaResponse.json();
-    if (!/^v\d+\.\d+\.\d+/.test(meta.upstreamReleaseTag || '') ||
-        meta.browserConverterVersion !== meta.upstreamReleaseVersion ||
-        meta.mixedVersionExperiment !== false ||
-        !/^[a-f0-9]{40}$/.test(meta.converterCoreCommit || ''))
-      throw new Error('Missing or unexpected editor/converter provenance metadata');
-    $('versionStatus').textContent = `Editor ${meta.upstreamReleaseTag} · browser converter ${meta.browserConverterVersion} (matching source build)`;
-    log(`Editor ${meta.upstreamReleaseTag}; x2t converter ${meta.browserConverterVersion} (source version matched; document behavior still needs testing)`);
     if (!/^[0-9a-f]{64}$/.test(meta.converterJsSha256||'') ||
         !/^[0-9a-f]{64}$/.test(meta.converterWasmSha256||''))
       throw new Error('Site lacks the new converter-integrity metadata. Deploy updated GitHub Actions files first.');

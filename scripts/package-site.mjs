@@ -14,27 +14,10 @@ import { existsSync, promises as fs } from 'node:fs';
 import { basename, dirname, extname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync, gunzipSync } from 'node:zlib';
-import { expectedConverter, examineConverter } from './check-converter-pair.mjs';
-
+import { PINNED, examineConverter } from './check-converter-pair.mjs';
+const versions = JSON.parse(await fs.readFile(new URL('./versions.json', import.meta.url), 'utf8'));
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-// A resolved official release is required for a real build. The fixture path is
-// deliberately limited to simulated packaging tests, never GitHub Actions.
-const isFixture = process.env.POC_TEST_FIXTURE === '1';
-const releaseTag = process.env.EO_RELEASE_TAG || (isFixture ? 'v9.3.5' : '');
-if (!/^v\d+\.\d+\.\d+(?:-(?:rc|beta|alpha|hotfix)\.[A-Za-z0-9.-]+)?$/.test(releaseTag)) {
-  throw new Error('Official Euro-Office release not resolved. Run scripts/resolve-release.mjs first.');
-}
-const releaseVersion = releaseTag.slice(1);
-const releaseAssetName = process.env.EO_DEB_NAME || (isFixture ? `euro-office-documentserver_${releaseVersion}_amd64.deb` : '');
-if (!/^[A-Za-z0-9_.+~-]+\.deb$/.test(releaseAssetName)) {
-  throw new Error('Released engine asset/version mismatch during packaging');
-}
-const officialReleaseAssetSha256 = process.env.EO_RELEASE_ASSET_SHA256 || '';
-if (officialReleaseAssetSha256 && !/^[a-f0-9]{64}$/.test(officialReleaseAssetSha256)) {
-  throw new Error('Invalid official Euro-Office release asset SHA256');
-}
-
 const source = resolve(process.argv[2] || '.work/ranuts/dist');
 const ranutsCheckout = resolve(process.env.RANUTS_SOURCE_ROOT || dirname(source));
 const destination = resolve(process.argv[3] || 'dist', 'office');
@@ -88,9 +71,12 @@ if (!existsSync(join(legalDirectory, 'euro-office-LICENSE.txt')) ||
 await fs.cp(legalDirectory, join(destination, 'LICENSES'), { recursive: true });
 await fs.writeFile(join(destination, 'PROTOTYPE-NOTICES.txt'),
   `This experimental browser editor is based on Ranuts/document commit ` +
-  `1301bb8bdac9092c4eb88a6f2f4ff5080cec68bd and incorporates editor ` +
-  `components from Euro-Office DocumentServer ${releaseTag}, with the ` +
-  `the pinned Ranuts browser-only integration and a converter compiled from release-matched Euro-Office core.\n` +
+  `${versions.ranuts.commit} and incorporates editor ` +
+  `components from Euro-Office DocumentServer ${versions.editor.releaseTag}, with ` +
+  `the pinned @kreijstal/eurooffice-sdkjs-common ${versions.converter.version} ` +
+  `converter and earlier third-party browser integration.\n` +
+  `IMPORTANT: the converter is from the release candidate, NOT the final ` +
+  `Euro-Office engine. Browser compatibility must be independently tested.\n` +
   `The preserved Ranuts NOTICE records the original Ranuts distribution and ` +
   `does not alone describe the Euro-Office engine transplant.\n` +
   `See LICENSE, NOTICE, and LICENSES/ for upstream and third-party license ` +
@@ -187,10 +173,10 @@ const jsGlue = join(destination,'sdkjs/common/wasm/x2t/x2t.js');
 // Synthetic converter fixtures are permitted only under the explicit local
 // smoke-test flag. GitHub's real build never sets this flag.
 const testFixture = process.env.POC_TEST_FIXTURE === '1';
-const expected = expectedConverter();
-const pairing = examineConverter(wasmBytes, await fs.readFile(jsGlue,'utf8'), expected);
+const pairing = examineConverter(wasmBytes, await fs.readFile(jsGlue,'utf8'),
+  testFixture ? {wasm:null, js:null, importModule:'a'} : PINNED);
 if (!pairing.ok) throw new Error(`Incompatible x2t WASM/JS pair in deployed assets:\n${pairing.errors.join('\n')}`);
-const converterRevision = pairing.wasmSha256.slice(0, 16);
+const converterRevision = PINNED.wasm.slice(0, 16);
 const gzipPath = `${raw}.gz`;
 const gzipped = gzipSync(wasmBytes, { level: 9 });
 if (!gunzipSync(gzipped).equals(wasmBytes)) throw new Error('Gzip converter round-trip failed.');
@@ -250,22 +236,20 @@ for (const item of ['editor.html','LICENSE','NOTICE','sdkjs/common/wasm/x2t/x2t.
 await fs.writeFile(join(destination,'../.nojekyll'),'');
 const meta = {
   siteBase, officeBase,
-  sourceRevision: '1301bb8bdac9092c4eb88a6f2f4ff5080cec68bd',
+  sourceRevision: versions.ranuts.commit,
   sourceUrl: 'https://github.com/ranuts/document', licence: 'AGPL-3.0',
   packagingFix: 'onlyoffice-nested-index-path-v2',
   converterDelivery: 'gzip-streaming-with-raw-fallback',
   converterWasmSha256: pairing.wasmSha256,
   converterJsSha256: pairing.jsSha256,
   converterImports: pairing.importedModules,
-  upstreamReleaseTag: releaseTag,
-  upstreamReleaseVersion: releaseVersion,
-  upstreamReleaseAsset: releaseAssetName,
-  officialReleaseAssetSha256: officialReleaseAssetSha256 || null,
-  browserConverterVersion: releaseVersion,
-  converterSourceMode: testFixture ? 'official-eurooffice-first' : JSON.parse(await fs.readFile(resolve('.work/converter-manifest.json'),'utf8')).sourceMode,
-  converterCoreCommit: testFixture ? 'fixture' : JSON.parse(await fs.readFile(resolve('.work/converter-manifest.json'),'utf8')).coreCommit,
-  mixedVersionExperiment: false,
-  description: `Experimental Word-only EuroOffice ${releaseTag} + matching x2t built from official release core; compatibility unverified. No patient data.`,
+  releaseAssetName: process.env.EUROOFFICE_DEB_ASSET || null,
+  releaseAssetSha256: process.env.EUROOFFICE_OBSERVED_DEB_SHA256 || null,
+  euroofficeRelease: versions.editor.releaseTag,
+  euroofficeDebVersion: versions.editor.debVersion,
+  converterPackage: `${versions.converter.npmName}@${versions.converter.version}`,
+  converterCompatibility: versions.converter.compatibility,
+  description: 'Experimental Word-only EuroOffice 9.3.5 with RC converter + pinned Ranuts/document; GitHub Pages test only. Not for patient data.',
 };
 await fs.writeFile(join(destination,'eurooffice-poc-build.json'),JSON.stringify(meta,null,2)+'\n');
 let bytes = 0, files = 0;

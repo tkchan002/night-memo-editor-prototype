@@ -1,115 +1,80 @@
-# EuroOffice-first browser editor + WASM x2t (experimental)
+# EuroOffice Browser — official v9.3.5 upgrade test
 
-**Status: the repository is complete and locally tested, but the full upstream WebAssembly build has NOT been executed successfully or demonstrated on a real EuroOffice release.** This is not a verified production editor. **Do not upload identifiable patient, employee, or other confidential documents.** This project is unofficial and is not affiliated with Euro-Office, CryptPad, or Ranuts.
+**Experimental, browser-only, Word-only proof of concept. Not for patient or production use.**
 
-This repository replaces the previous *Approach B* GitHub Actions experiment. It is a fresh implementation of the **EuroOffice-first source strategy**, not another iteration of the mass three-way merge.
+This repository is a complete GitHub Actions / GitHub Pages test-build recipe, derived from the user's v4 proof of concept. The editor engine comes from the **official Euro-Office DocumentServer v9.3.5 release** (not the release candidate). The standalone browser framework is a pinned `Ranuts/document` checkout. The browser-only adapter and the document converter are still from the earlier independently published RC integration.
 
-## The essential difference
+## Read this first: important converter compatibility limitation
 
-| Previous pipeline | This repository |
-| --- | --- |
-| Diff CryptPad's bundled modified ONLYOFFICE core against an old ONLYOFFICE tag | Start with the **actual EuroOffice core** pinned by the chosen official DocumentServer release |
-| Stage ~8,000 source differences, fail on ~75 unrelated conflicts | No bulk core comparison or automatic upstream C++ transplant |
-| Require a conflict-free generic merge before compilation | Attempt the compiler using EuroOffice's own source; diagnose genuine compiler errors |
-| Implicit CryptPad C++ changes | Explicit and auditable compatibility inputs: three pinned doctrenderer stub files only, plus manually approved, SHA-256-pinned EuroOffice patches |
-| Download big official Debian package before trying Emscripten | Compile the converter **first**, then obtain the matching official package |
-| Optional diagnostic artifact could be absent | Capture a compiler-log tail, source SHA and source/recipe reports; show run-summary text |
+**The official final 9.3.5 editor is combined with a converter from `9.3.5-rc.1.build.1`.** A verified matching *final* v9.3.5 browser converter was not available for inspection when this ZIP was prepared. This is a deliberately **mixed-version compatibility experiment**, not a known-good final-release editor. The JS/WASM pair itself has pinned SHA-256 checks, but these checks DO NOT demonstrate compatibility with the newer EuroOffice editor. A successful Actions build DOES NOT demonstrate that DOCX opening, editing or exporting works.
 
-**Important distinction:** CryptPad's original *Emscripten build tooling* is still used, pinned to commit `95f775fd3c42fae9e9af66ca072d3da3763e6c76`. Its complete modified `core/` source is **not checked out** by the sparse recipe checkout and any existing recipe `core/` is explicitly removed before staging EuroOffice's exact source. However, three **specifically allowlisted WASM doctrenderer compatibility files** are fetched as Git blobs from that pinned CryptPad commit, SHA-256 recorded, and copied into an isolated Docker doctrenderer build stage. This is a narrowly documented source adaptation, not a zero-modification EuroOffice compilation. This does not mean EuroOffice has an officially supported standalone x2t WASM build system. The legacy recipe may still need carefully ported compatibility fixes.
+If the new engine changed an internal adapter anchor, the build stops instead of pretending compatibility. If the engine builds but has a runtime incompatibility, you must test it in a real browser with fictional files. If it fails, revert to the previously working v4 build.
 
-## Get started (GitHub website; no CLI needed)
+## How to deploy with the GitHub website (no CLI)
 
-1. Create a **new public or private GitHub repository** for this experiment; leave your existing functioning Nurse Memo project unchanged.
-2. Upload the contents of the supplied ZIP to the new repository. Ensure the hidden `.github/workflows/eurooffice-first-wasm.yml` file is present. On Mac, Finder's **Command + Shift + .** shows hidden files.
-3. Go to **Settings > Pages**, choose **GitHub Actions** as the build/deploy source.
-4. Go to **Actions**, select **EuroOffice-first browser WASM build (experimental)**, then **Run workflow**. Leave `release_tag` blank for GitHub's latest stable EuroOffice release, or enter a specific valid tag such as `v9.3.5`.
-5. Open that run's **Summary** and the `compile-and-publish` job. Read the actual failing step if compilation stops. After a failure, look for the `eurooffice-first-build-diagnostics` artifact **on the run summary page**, not inside the job log. GitHub only displays this section if an upload took place. The relevant errors should also be in the job's compiler log.
-6. A successful workflow deploys an experimental browser editor at your GitHub Pages address. **Build success alone is not clinical-document validation**: exercise loading, editing and exporting fictional Word files, formatting, PDF, and the browser console before trusting any features.
+1. **Prefer a separate public test repository**, so the new GitHub Pages deployment does not replace the user's existing v4 website. Create a GitHub repository, e.g. `eurooffice-935-test`.
+2. Extract this ZIP **locally**. Upload its **contents**, including hidden `.github/workflows/eurooffice-poc.yml`, to the **root** of the new repository. Do not upload the ZIP as a single GitHub source file. The `scripts/`, `tests/`, `site/`, `.github/`, `LICENSES/` and `README.md` must be in the repository root.
+3. In **Settings → Pages → Build and deployment**, choose **GitHub Actions**. Workflow permission defaults can remain read-only; the deployment job requests `pages: write` and `id-token: write`.
+4. Commit the upload on `main`. The workflow starts on push; you can also open **Actions → EuroOffice Browser-only Proof of Concept → Run workflow**.
+5. The workflow downloads the large official Debian release and the small source/dependency inputs itself. Neither the `.deb` nor the npm package is included in the ZIP. A large official `.deb` download may take time.
+6. Once the workflow reports a successful deployment, open the site link listed in the `github-pages` environment. First click **Check deployed converter assets**, then open a fictional DOCX and exercise open/edit/save, DOCX export and PDF export.
 
-A standard GitHub-hosted runner has limited disk and memory. The entire converter is a large C++ build. Even a correct recipe may need a larger runner; the `340`-minute job timeout does not guarantee sufficient resources.
+**Do not upload real patient details or modify the current Nurse Memo production/demo repository for this experiment.**
 
-## Actual build sequence
+## Where each input comes from
 
-1. **Local tests:** shell/Python/JavaScript syntax, release/package selection, source-staging, compiled-pair integrity and Pages packaging tests.
-2. **Resolve release:** GitHub's official `Euro-Office/DocumentServer` stable release API, with optional pinned tag; validate release asset URLs and published digests.
-3. **Verify exact source:** checkout the release's **named tag**. Read the `core` Git submodule commit from `HEAD:core` and verify its checked-out SHA. No floating `main`, latest `core`, or guessed equivalent tag.
-4. **Prepare build toolchain:** sparse-checkout only the pinned `cryptpad/onlyoffice-x2t-wasm` build scripts. Delete any pre-existing bundled `core` directory, then stage a *copy* of the official EuroOffice release source, leaving the original untouched. Only the three explicitly named compatibility blobs are subsequently fetched by `git show` (no full bundled core checkout).
-5. **Apply only explicit source patches:** inspect `patches/manifest.json` for allowlisted paths and file hashes, tied to that exact core commit. The manifest starts with **no patches**. This is intentional, not a claim that zero changes will necessarily compile.
-6. **Stage pinned WASM compatibility files:** `scripts/stage-wasm-compat.py` checks the pinned CryptPad Git tree for `doctrenderer_empty.cpp`, `docbuilder_empty.cpp` and `docbuilder_p_empty.cpp`, rejects non-regular/missing/oversized blobs and unexpected official source targets, then writes exactly three files to `wasm-compat/` *outside* the staged EuroOffice `core/`. It records each Git blob identity, byte count and SHA-256 in `.work/wasm-compat-report.json`. These stubs may fail to compile against newer EuroOffice interfaces.
-7. **Generate and audit Docker adapter:** the recipe adapter replaces the three unusable `RUN cp ..._empty.cpp` lines with three explicit `COPY wasm-compat/...` instructions scoped to the Docker `doctrenderer` stage. It adds the missing Gumbo stage, and an export stage for `x2t.js` and `x2t.wasm`. Before Docker starts, it audits all local Docker `COPY` inputs and stops on missing paths. The generated Dockerfile digest and input count are in `.work/build-recipe-report.json`.
-8. **Attempt real Emscripten compilation:** `docker buildx build` against the staged EuroOffice source, with the three explicitly documented temporary Docker-only stubs. No original CryptPad converter binary, RC1, or old release is accepted as a fallback. Failure is a real compilation/toolchain issue, not an automatic permission to replace EuroOffice files.
-9. **Verify emitted converter pair:** compile manifest records core SHA, approved patches, the three compatibility source hashes and JS/WASM SHA-256 values; WebAssembly imports must match the browser loader ABI.
-10. **Get official editor assets:** select and download the official AMD64 `.deb`, inspecting its internal Debian `Package`, `Version`, and `Architecture`. The filename is a *hint only*; future strange `.deb` filenames are handled. Extract only the needed editor assets.
-11. **Assemble browser site:** reuse a pinned `Ranuts/document` browser-only UI integration and transfer the official EuroOffice editor assets. Generate a gzip WASM copy from the verified raw converter (GitHub Pages cannot set Brotli `Content-Encoding` on demand). Enforce final file and provenance checks before publication.
+| Input | Source | Version / integrity handling |
+|---|---|---|
+| Official EuroOffice editor (sdkjs/web-apps/dictionaries) | `Euro-Office/DocumentServer` GitHub Release | **v9.3.5 final**, AMD64 Debian `.deb` discovered via the exact-tag GitHub release API; Debian control fields checked |
+| Offline browser host and fonts | `Ranuts/document` | Exact commit `1301bb8bdac9092c4eb88a6f2f4ff5080cec68bd`, verified before applying local patch |
+| Standalone browser adapter | Included `scripts/vendor` integration script and patch from the earlier v4 integration | Kept largely unchanged; version-sensitive anchors fail closed |
+| Document converter | `@kreijstal/eurooffice-sdkjs-common` npm package | **9.3.5-rc.1.build.1**, both WASM and JS file digests checked; **compatibility with final editor unproven** |
+| Build dependencies | Ranuts lockfile / pnpm registry | `pnpm install --frozen-lockfile` with pnpm 11.4.0 and Node 24 |
 
-The browser proof of concept is Word-focused. The converter may support additional input formats, but XLSX/PPTX editors are not published in this version and no guarantee of their output quality is made.
+This recipe is **not self-contained**. The downloaded GitHub and npm inputs are required at build time, as requested for this temporary test. The published site has no document-processing backend.
 
-## Source patches: how to add one safely
+## Version control and release discovery
 
-`patches/manifest.json` initially contains:
+The file `scripts/versions.json` is the single configuration for release tag, Debian package version, Ranuts revision, and converter version and SHA-256 pins. For this test, **do not change the converter version or hashes without independently inspecting the new package**.
 
-```json
-{
-  "schema": 1,
-  "coreCommit": "",
-  "patches": []
-}
-```
+`scripts/resolve-eurooffice-deb.mjs` uses GitHub's release metadata for the exact tag `v9.3.5`, selecting exactly one official AMD64 `.deb`. It does not assume that the upstream package is named `euro-office-documentserver_9.3.5_amd64.deb`; upstream has changed build suffixes in the past. The script rejects ambiguity or untrusted asset URLs. After the download, `dpkg-deb -f` verifies the package name, final `9.3.5` version (allowing a Debian revision suffix), and AMD64 architecture. If the GitHub API supplies an asset SHA-256 digest, it is verified; the observed SHA-256 is always logged. Optionally set the Actions repository variable `EUROOFFICE_DEB_SHA256` to a known, trusted 64-character SHA-256 for an additional check.
 
-**Do not fill it with the old 75-conflict dump.** When a compiler error reveals a *specific necessary* adaptation, review the change against the exact official release. Put a standalone unified Git patch, e.g. `0001-wasm-compat.patch`, inside `patches/`. Set `coreCommit` to the source commit printed in GitHub Actions. Add an entry with the patch's SHA-256 and the **exact paths it may modify**:
+The converter is also checked **before** building Vite, **after** Vite, and **after** static packaging. Old Ranuts `.br` files are removed and cannot overwrite the canonical converter, preserving the v4 fix for the `Import #0 "env"` error. This safeguards converter consistency, *not* editor/converter cross-version compatibility.
 
-```json
-{
-  "schema": 1,
-  "coreCommit": "<40-character official commit SHA>",
-  "patches": [
-    {
-      "file": "0001-wasm-compat.patch",
-      "sha256": "<64-character actual SHA-256 of patch file>",
-      "allowedPaths": ["X2tConverter/src/example.cpp"]
-    }
-  ]
-}
-```
+## Expected failure modes
 
-These placeholders are examples, not patches to apply. `scripts/stage-official-core.py` verifies the source commit, tracked-file cleanliness, patch contents, digest and allowlist, checks each patch before applying it and modifies **only the staged copy**. It rejects unreviewed source changes, unapproved files, symlink edits and stale patches rather than guessing.
+| First failing step or message | Interpretation / next action |
+|---|---|
+| `RELEASE RESOLUTION FAILED` | GitHub API unavailable, no matching official AMD64 `.deb`, or multiple candidates. Check the release; do not bypass the fail-closed check. |
+| Debian control version mismatch | Release asset may be mislabeled or built from a different version. Retain the log and investigate before using it. |
+| `npm pack` fails | Converter package unavailable. See manual mirror fallback below. |
+| `git apply --check` | The pinned Ranuts checkout does not match the existing patch. |
+| `INCOMPATIBLE Euro-Office web-apps bundle` | Official v9.3.5 changed an internal webpack/minified symbol expected by the old offline adapter. Adapter source work is required. |
+| Transplant references missing files | EuroOffice's final package layout differs from the RC. Inspect the genuine release package rather than adding placeholder files. |
+| `Incompatible x2t WASM/JS pair` / SHA mismatch | Downloaded converter is different from the known RC pair; do not disable verification. |
+| Failed DOCX/PDF workflow despite green build | Runtime editor/adapter/converter incompatibility, which CI static tests cannot prove away. Preserve the current v4 site. |
 
-## Repository contents
+### Manual fallback if the converter npm archive disappears
 
-- `.github/workflows/eurooffice-first-wasm.yml` — single manual Actions build/publish pipeline.
-- `scripts/resolve-release.mjs`, `scripts/select-release-deb.mjs` — resolve stable release and identify real Debian package architecture.
-- `scripts/prepare-release-core.sh`, `scripts/verify-git-tag-checkout.sh` — release tag and submodule identity.
-- `scripts/stage-official-core.py`, `patches/manifest.json` — no bulk merge; explicitly approved source patches only.
-- `scripts/stage-wasm-compat.py` — extracts precisely three version-pinned doctrenderer compatibility files; hash and provenance report.
-- `scripts/prepare-recipe.py`, `scripts/build-matching-wasm.sh` — pinned compiler recipe, explicit Docker COPY inputs, and pre-build missing-source audit.
-- `scripts/create-converter-manifest.mjs`, `scripts/check-converter-pair.mjs` — converter identity/integrity.
-- `scripts/build-poc.sh`, `scripts/package-site.mjs`, `scripts/verify-site.mjs` — Debian/editor integration and final publication checks.
-- `scripts/vendor/` — Ranuts browser adapter and editor-file transplant, retained from the previous experimental repository.
-- `site/` — browser demonstration harness; `tests/` — automated fixtures.
-- `docs/KNOWN_LIMITATIONS.md` — remaining engineering risks and expected next investigation.
+In the **test repository**, create a GitHub Release with tag `editor-inputs`. Upload the **actual original archive** named `eurooffice-sdkjs-common-9.3.5-rc.1.build.1.tgz` to that release, then rerun Actions. The workflow tries this exact filename if `npm pack` fails. Do not fabricate a converter archive, remove digests or use the unrelated Ranuts `x2t.wasm.br` file.
 
-## Testing and limitations
+## Testing checklist
 
-Run the local tests (Node.js 24, Git and Python 3):
+After the GitHub Actions build and deployment succeed:
 
-```bash
-bash -n scripts/*.sh
-python3 -m py_compile scripts/*.py
-for f in scripts/*.mjs site/poc.js; do node --check "$f"; done
-node --test tests/*.test.mjs
-```
+1. Use **Check deployed converter assets** and copy the diagnostic result.
+2. Open a **fictional** DOCX with headings, paragraphs, lists and a table. Confirm pages actually render; an "open acknowledged" event alone is not enough.
+3. Edit text, invoke Save, export DOCX and reopen the export to inspect the actual text and layout.
+4. Export PDF, open it in a PDF viewer and verify layout, not merely the `%PDF-` header.
+5. Test read-only/editable toggles and repeated document opens.
+6. Watch browser Console/Network for incorrect SDK paths, converter `.wasm` imports and uncaught exceptions.
 
-Local tests cover Git-managed fixture repositories, sparse Git checkouts and pinned three-file extraction, valid/missing/conflicting patches, unmodified EuroOffice staging, Docker stage-adapter integrity, release/package architecture resolution, source-tag identity and HTML/WASM packaging. **They do not compile the many-gigabyte upstream EuroOffice tree**. Full real Emscripten build, browser document round trips and license verification remain necessary.
+A green build means the static package was assembled and structural checks passed. **It does not certify that official v9.3.5 works with the third-party RC converter.**
 
-A failure in C++ compilation is **not** a test-suite failure and should be addressed by reading the exact compiler output. Source-level changes should be limited to evidence-backed adaptations; never silence errors by substituting a mismatched old WASM or wiping upstream changes.
+## License and attribution
 
-## Licenses and security
+Preserve `LICENSES/`, the upstream Ranuts `LICENSE` and `NOTICE` copied into the distribution, and the generated `PROTOTYPE-NOTICES.txt`. The third-party browser integration and the official editors are based on AGPL-licensed software. This experimental distribution is not approved for clinical deployment. Review corresponding-source and attribution requirements before wider redistribution.
 
-Source/editor assets may be subject to AGPL-3.0 and component-specific third-party/font licenses; see `LICENSES/` and the actual upstream notices. Obtain legal review before using or distributing in a hospital. The prototype runs locally in the browser for document editing, but hosting it on GitHub Pages is **not** evidence of compliance with healthcare privacy, cybersecurity or licensing requirements.
+## Local checks performed on this ZIP
 
-Upstream references:
-
-- https://github.com/Euro-Office/DocumentServer
-- https://github.com/Euro-Office/core
-- https://github.com/cryptpad/onlyoffice-x2t-wasm
-- https://github.com/ranuts/document
+The source-level tests (`node --test tests/*.test.mjs`), syntax checks (`bash -n scripts/build-poc.sh`, `python3 -m py_compile ...`) and simulated Pages packaging tests can run without downloads. The entire 500+ MB Debian build and browser-level DOCX/PDF operations **could not be run in this environment due to unavailable outbound network access**. The first GitHub Actions run remains the actual compatibility test.

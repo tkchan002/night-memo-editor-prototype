@@ -118,6 +118,9 @@ for app, ns in WEB_APPS.items():
     p = os.path.join(PUB, f'web-apps/apps/{app}/main/app.js')
     s = read(p)
     key = f'{ns}.Controllers.Main=Backbone.Controller.extend('
+    count = s.count(key)
+    if count != 1:
+        sys.exit(f'INCOMPATIBLE Euro-Office web-apps bundle: expected exactly one {key!r} in {p}; found {count}. Update the offline transplant for this engine version; do not remove this guard.')
     i = s.index(key)
     end = call_end(s, i + len(key) - 1)
     glue = ';(function(define){' + web_glue[app] + '})(function(name,deps,body){body()});'

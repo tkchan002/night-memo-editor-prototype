@@ -62,15 +62,6 @@ test('standalone Pages packaging uses project base, never rewrites nested index 
    assert.ok(!existsSync(join(output,'office/sdkjs/cell')));
    const v=spawnSync(process.execPath,['scripts/verify-site.mjs',output],{cwd:repo,env,encoding:'utf8',timeout:25000});
    assert.equal(v.status,0,v.stderr||v.stdout);
-   // Real packaging (not merely release discovery) must accept the upstream
-   // Debian packaging revision and record the exact asset in provenance.
-   const revisedName = 'euro-office-documentserver_9.3.5-0_amd64.deb';
-   const revisedEnv = {...env, EO_DEB_NAME: revisedName};
-   const revised=spawnSync(process.execPath,['scripts/package-site.mjs',input,output],
-     {cwd:repo,env:revisedEnv,encoding:'utf8',timeout:25000});
-   assert.equal(revised.status,0,revised.stderr||revised.stdout);
-   const metadata=JSON.parse(readFileSync(join(output,'office/eurooffice-poc-build.json'),'utf8'));
-   assert.equal(metadata.upstreamReleaseAsset,revisedName);
  } finally { rmSync(temp,{recursive:true,force:true}); }
 });
 
@@ -83,7 +74,7 @@ test('packaging rejects missing original NOTICE rather than inventing a legal at
    for(const dir of ['sdkjs','web-apps','assets'])write(input,`${dir}/placeholder`,'x');
    write(join(temp,'ranuts'),'LICENSE','LICENSE');
    const p=spawnSync(process.execPath,['scripts/package-site.mjs',input,output],
-     {cwd:repo,env:{...process.env,GITHUB_REPOSITORY:'example/poc',POC_TEST_FIXTURE:'1'},encoding:'utf8',timeout:25000});
+     {cwd:repo,env:{...process.env,GITHUB_REPOSITORY:'example/poc'},encoding:'utf8',timeout:25000});
    assert.notEqual(p.status,0);
    assert.match(p.stderr,/Required NOTICE not found/);
  } finally {rmSync(temp,{recursive:true,force:true});}
@@ -103,7 +94,7 @@ test('packaging refuses to use a compressed converter when the pinned raw binary
    const wasi=Buffer.from('0061736d0100000001040160000002090103656e7601660000','hex');
    write(input,'sdkjs/common/wasm/x2t/x2t.wasm.br',brotliCompressSync(wasi));
    const p=spawnSync(process.execPath,['scripts/package-site.mjs',input,output],
-     {cwd:repo,env:{...process.env,GITHUB_REPOSITORY:'example/poc',POC_TEST_FIXTURE:'1'},encoding:'utf8',timeout:25000});
+     {cwd:repo,env:{...process.env,GITHUB_REPOSITORY:'example/poc'},encoding:'utf8',timeout:25000});
    assert.notEqual(p.status,0);
    assert.match(p.stderr,/Missing pinned raw x2t\.wasm/);
  } finally {rmSync(temp,{recursive:true,force:true});}

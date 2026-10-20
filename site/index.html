@@ -8,11 +8,10 @@
 <script type="module" src="./poc.js"></script>
 </head>
 <body>
-<header class="top"><div><h1>EuroOffice × Ranuts</h1><p>Browser-only Word editor proof of concept</p></div><span class="tag">Experimental • not for clinical data</span></header>
+<header class="top"><div><h1>EuroOffice × Ranuts</h1><p>Official 9.3.5 editor + experimental RC converter • browser-only test</p></div><span class="tag">Experimental • not for clinical data</span></header>
 <main class="layout">
   <section class="controls" aria-label="Editor test controls">
     <h2>1. Choose a fictional DOCX</h2>
-    <p id="versionStatus" class="footnote">Loading editor and converter version…</p>
     <p>Files stay in this browser. Do not use real patient information.</p>
     <input id="file" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
     <button id="converterCheck">Check deployed converter assets</button>
@@ -27,7 +26,7 @@
     <div class="status"><span class="dot" id="dot"></span><output id="status">Waiting for editor</output></div>
     <pre id="log" aria-live="polite"></pre>
     <button id="copyLog">Copy diagnostic log</button>
-    <p class="footnote">A successful page load is not proof that DOCX/PDF export or document formatting is correct. Compare exports with your current Nurse Memo editor.</p>
+    <p class="footnote">The document converter is from 9.3.5-rc.1 and may be incompatible with the final 9.3.5 editor. A successful page load is not proof that DOCX/PDF export or document formatting is correct. Compare exports with your current Nurse Memo editor.</p>
   </section>
   <section class="editorPane" aria-label="EuroOffice document editor">
     <div class="editorHeader"><strong>Editor</strong><span id="docName">No document opened</span></div>

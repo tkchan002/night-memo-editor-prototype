@@ -1,0 +1,20 @@
+{
+  "editor": {
+    "releaseRepository": "Euro-Office/DocumentServer",
+    "releaseTag": "v9.3.5",
+    "debVersion": "9.3.5",
+    "architecture": "amd64"
+  },
+  "ranuts": {
+    "repository": "Ranuts/document",
+    "commit": "1301bb8bdac9092c4eb88a6f2f4ff5080cec68bd"
+  },
+  "converter": {
+    "npmName": "@kreijstal/eurooffice-sdkjs-common",
+    "version": "9.3.5-rc.1.build.1",
+    "wasmSha256": "841ff9b648f0a03a6e610e6f1d0e822a526dd3142eb43a64101653963f4fc35e",
+    "jsSha256": "66c2fe0e6de280d81643ffc7ba31cd9a5205c004b72227c08e78a0821ba0e520",
+    "importModule": "a",
+    "compatibility": "Experimental: converter originates from 9.3.5-rc.1, not from the official final 9.3.5 build"
+  }
+}
