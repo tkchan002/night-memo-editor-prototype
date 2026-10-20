@@ -21,9 +21,10 @@ git -C "$RECIPE" checkout --detach "$RECIPE_COMMIT"
 if [[ ! -d "$BASELINE/.git" ]]; then
   git clone --filter=blob:none --depth 1 --branch v9.3.0.140 https://github.com/ONLYOFFICE/core.git "$BASELINE"
 fi
-[[ "$(git -C "$BASELINE" describe --tags --exact-match HEAD)" == v9.3.0.140 ]] || {
-  echo 'Baseline checkout does not match v9.3.0.140' >&2; exit 1;
-}
+# Verify by the requested tag ref and an independently checked upstream SHA.
+# git describe may select a different tag pointing at the same commit.
+bash "$ROOT/scripts/verify-git-tag-checkout.sh" "$BASELINE" \
+  'v9.3.0.140' '269dd9b8bc9e869fc250f26cefbb908344a533c5'
 [[ -d "$RECIPE/core" ]] || { echo 'Pinned CryptPad recipe lacks its modified core' >&2; exit 1; }
 python3 "$ROOT/scripts/port-wasm-changes.py" \
   "$BASELINE" "$RECIPE/core" "$OFFICIAL" "$WORK/wasm-port-report.json"

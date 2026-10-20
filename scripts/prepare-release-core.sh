@@ -6,9 +6,9 @@ SERVER="$ROOT/.work/official-source"
 if [[ ! -d "$SERVER/.git" ]]; then
   git clone --filter=blob:none --depth 1 --branch "$EO_RELEASE_TAG" https://github.com/Euro-Office/DocumentServer.git "$SERVER"
 fi
-[[ "$(git -C "$SERVER" describe --tags --exact-match HEAD)" == "$EO_RELEASE_TAG" ]] || {
-  echo 'DocumentServer source checkout does not match selected release tag.' >&2; exit 1;
-}
+# A release checkout must be exactly the selected named tag, even if multiple
+# tags resolve to the same commit. No floating branch or git describe alias.
+bash "$ROOT/scripts/verify-git-tag-checkout.sh" "$SERVER" "$EO_RELEASE_TAG"
 GITLINK="$(git -C "$SERVER" rev-parse HEAD:core)"
 [[ "$GITLINK" =~ ^[a-f0-9]{40}$ ]] || { echo 'Release does not pin a valid core gitlink'; exit 1; }
 git -C "$SERVER" submodule update --init core

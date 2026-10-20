@@ -28,6 +28,24 @@ This repository is a **build experiment**, not a verified stable release. It att
 9. `scripts/build-matching-wasm.sh` builds the modified matched source with the pinned CryptPad Dockerfile/Emscripten recipe. It extracts `x2t.js` and `x2t.wasm` directly from the same build, verifies their ABI and generates SHA-256 provenance.
 10. The pinned Ranuts browser integration and Euro-Office editor files are assembled. The converter binaries are installed AFTER the Ranuts build as well, preventing old `.wasm.br` from replacing the new converter. Packaging verifies the final hashes and deploys **only** verified static assets.
 
+## Baseline tag verification (updated)
+
+The preflight checks the ONLYOFFICE `v9.3.0.140` tag against its known upstream
+commit, `269dd9b8bc9e869fc250f26cefbb908344a533c5`. The older `git describe
+--tags --exact-match HEAD` identity check was brittle: when more than one tag
+names a commit, Git can return an alternate name. The updated validator checks
+three identities independently: the local checkout's `HEAD`, the *explicit*
+`refs/tags/v9.3.0.140^{commit}` reference, and the pinned upstream SHA. It
+rejects missing/moved tags, wrong checkout commits and modified tracked files.
+The same explicit-ref validation is used for the selected EuroOffice
+DocumentServer release tag (without a hardcoded commit because that release is
+selected dynamically). Every check prints the actual hashes to the Actions
+log, so no artifact download is needed to diagnose a version-check failure.
+
+This corrects a validation weakness; it does **not** resolve genuine
+CryptPad-versus-EuroOffice merge conflicts. A clean baseline check can be
+followed by a real source conflict.
+
 ## Why 57 passing tests did not prevent ~46 source conflicts
 
 The previous 57 passing tests mostly exercised **small, synthetic Git repositories**. They did not fetch and merge the real release-pinned EuroOffice core. A green fixture suite therefore could not establish compatibility with the current EuroOffice release. The reported `Common/3dParty/v8/nc-build.py: file added/deleted differently in EuroOffice` means CryptPad's version and the actual EuroOffice core differ structurally; it is **not** a failed unit test and should not be fixed by blindly choosing one branch. There may also be overlapping C++ edits. A correct port may require manual compiler/source adaptation.
