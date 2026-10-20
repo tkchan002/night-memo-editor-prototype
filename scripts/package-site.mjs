@@ -14,7 +14,8 @@ import { existsSync, promises as fs } from 'node:fs';
 import { basename, dirname, extname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync, gunzipSync } from 'node:zlib';
-import { PINNED, examineConverter } from './check-converter-pair.mjs';
+import { expectedConverter, examineConverter } from './check-converter-pair.mjs';
+
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 // A resolved official release is required for a real build. The fixture path is
@@ -26,7 +27,7 @@ if (!/^v\d+\.\d+\.\d+(?:-(?:rc|beta|alpha|hotfix)\.[A-Za-z0-9.-]+)?$/.test(relea
 }
 const releaseVersion = releaseTag.slice(1);
 const releaseAssetName = process.env.EO_DEB_NAME || (isFixture ? `euro-office-documentserver_${releaseVersion}_amd64.deb` : '');
-if (releaseAssetName !== `euro-office-documentserver_${releaseVersion}_amd64.deb`) {
+if (!/^[A-Za-z0-9_.+~-]+\.deb$/.test(releaseAssetName)) {
   throw new Error('Released engine asset/version mismatch during packaging');
 }
 const officialReleaseAssetSha256 = process.env.EO_RELEASE_ASSET_SHA256 || '';
@@ -89,7 +90,7 @@ await fs.writeFile(join(destination, 'PROTOTYPE-NOTICES.txt'),
   `This experimental browser editor is based on Ranuts/document commit ` +
   `1301bb8bdac9092c4eb88a6f2f4ff5080cec68bd and incorporates editor ` +
   `components from Euro-Office DocumentServer ${releaseTag}, with the ` +
-  `@kreijstal/eurooffice 9.3.5-rc.1.build.1 browser integration.\n` +
+  `the pinned Ranuts browser-only integration and a converter compiled from release-matched Euro-Office core.\n` +
   `The preserved Ranuts NOTICE records the original Ranuts distribution and ` +
   `does not alone describe the Euro-Office engine transplant.\n` +
   `See LICENSE, NOTICE, and LICENSES/ for upstream and third-party license ` +
@@ -186,10 +187,10 @@ const jsGlue = join(destination,'sdkjs/common/wasm/x2t/x2t.js');
 // Synthetic converter fixtures are permitted only under the explicit local
 // smoke-test flag. GitHub's real build never sets this flag.
 const testFixture = process.env.POC_TEST_FIXTURE === '1';
-const pairing = examineConverter(wasmBytes, await fs.readFile(jsGlue,'utf8'),
-  testFixture ? {wasm:null, js:null, importModule:'a'} : PINNED);
+const expected = expectedConverter();
+const pairing = examineConverter(wasmBytes, await fs.readFile(jsGlue,'utf8'), expected);
 if (!pairing.ok) throw new Error(`Incompatible x2t WASM/JS pair in deployed assets:\n${pairing.errors.join('\n')}`);
-const converterRevision = PINNED.wasm.slice(0, 16);
+const converterRevision = pairing.wasmSha256.slice(0, 16);
 const gzipPath = `${raw}.gz`;
 const gzipped = gzipSync(wasmBytes, { level: 9 });
 if (!gunzipSync(gzipped).equals(wasmBytes)) throw new Error('Gzip converter round-trip failed.');
@@ -260,9 +261,10 @@ const meta = {
   upstreamReleaseVersion: releaseVersion,
   upstreamReleaseAsset: releaseAssetName,
   officialReleaseAssetSha256: officialReleaseAssetSha256 || null,
-  browserConverterVersion: '9.3.5-rc.1.build.1',
-  mixedVersionExperiment: true,
-  description: `Experimental Word-only EuroOffice ${releaseTag} + pinned Ranuts/document; converter remains RC1. Compatibility unverified. No patient data.`,
+  browserConverterVersion: releaseVersion,
+  converterCoreCommit: testFixture ? 'fixture' : JSON.parse(await fs.readFile(resolve('.work/converter-manifest.json'),'utf8')).coreCommit,
+  mixedVersionExperiment: false,
+  description: `Experimental Word-only EuroOffice ${releaseTag} + matching x2t built from official release core; compatibility unverified. No patient data.`,
 };
 await fs.writeFile(join(destination,'eurooffice-poc-build.json'),JSON.stringify(meta,null,2)+'\n');
 let bytes = 0, files = 0;

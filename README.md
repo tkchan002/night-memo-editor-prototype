@@ -1,69 +1,54 @@
-# EuroOffice × Ranuts — latest-official-release browser experiment
+# EuroOffice × Ranuts — Approach B: matched-source x2t auto-build
 
-**EXPERIMENTAL. Not for patient records or production use.** This repository tests whether the **latest official stable Euro-Office DocumentServer engine** can run inside the browser-only Ranuts/document integration. It is not affiliated with Euro-Office or Ranuts. Keep the existing successfully working 9.3.5-RC1 prototype in a **different GitHub repository** as your fallback.
+**Experimental and unverified end-to-end. Do not use for clinical/patient data.**
 
-## What automatically updates, and what does not
+This repository is a **build experiment**, not a verified stable release. It attempts to build a browser-only Euro-Office Word editor using **the latest stable Euro-Office DocumentServer release AND the `core` source commit pinned by that same release**. It attempts to compile `x2t.js` and `x2t.wasm` from that matching core with an adapted CryptPad recipe. This project is unofficial and not affiliated with Euro-Office, Ranuts, or CryptPad.
 
-| Component | Selection |
-|---|---|
-| Official Euro-Office engine, web-apps, SDK | **Resolved from `Euro-Office/DocumentServer` GitHub `/releases/latest` on each workflow run**. Today this is v9.3.5. |
-| Official AMD64 `.deb` | Exact asset from that release's GitHub metadata; never construct a guessed URL |
-| Browser-only Ranuts/document base | Pinned commit `1301bb8bdac9092c4eb88a6f2f4ff5080cec68bd` |
-| Ranuts browser-only compatibility patch | Pinned from the third-party `@kreijstal/eurooffice@9.3.5-rc.1.build.1` package |
-| `x2t.js` and `x2t.wasm` (DOCX/PDF converter) | **Still pinned to verified 9.3.5 RC1 pair. NOT upgraded** |
+## Your browser-only setup
 
-**A build using latest Euro-Office editor components with the RC1 converter is a mixed-version compatibility experiment, not a fully matched latest release.** The editing engine and x2t exchange internal document representations; imports and SHA256 checks prove file integrity, **not** internal format compatibility. Test DOCX import, edit, reopen and PDF thoroughly. A matching stable-version WASM build would be needed for a fully updated browser editor.
+1. **Keep your working RC1 editor repository untouched.** Create a separate GitHub repository (`night-memo-editor-approach-b-test`) at https://github.com/new.
+2. Extract the ZIP, upload its *contents* to the new repository using GitHub's website. Make sure `.github/` is included (Mac Finder: Command+Shift+period reveals dotfolders).
+3. Under repository **Settings → Pages**, select **GitHub Actions** as the source.
+4. Under **Actions**, manually run **EuroOffice Approach B - Matched WASM Experimental Build**. Leave the version blank for the latest stable release or enter e.g. `v9.3.5` to pin it.
+5. Inspect Actions logs. The job first selects the release, then verifies Debian package identity, resolves the exact `core` Git submodule SHA, attempts a strict WASM source port, compiles it using Docker, and builds/deploys the browser editor *only if all checks pass*.
+6. If successful, open the experimental Pages site, click **Check deployed converter assets**, then test a **fictional** DOCX (opening, editing, read-only, DOCX round trip, PDF export, pagination and formatting).
 
-The workflow intentionally **stops** if the official asset is missing, a signature/patch no longer matches, the mixed converter is invalid, or the static output fails structural checks. It never silently falls back to RC1 editor components. A green GitHub Actions check also does not prove real-browser DOCX/PDF behavior.
+**This build is resource intensive.** Building CryptPad's converter and its many C++ dependencies can exceed a standard hosted GitHub runner's disk capacity, memory or runtime. The workflow allows 340 minutes, but this does not guarantee sufficient runner resources. If it runs out of disk or RAM, a larger Linux runner may be needed. You do not need to install a local toolchain.
 
-## Browser-only setup — separate test repository
+## Version/source guarantee
 
-1. Go to <https://github.com/new>. Create a new repository, e.g. `night-memo-editor-latest-test` (prefer **Public** if you need GitHub Pages on your account). **Do not use or overwrite your working `night-memo-editor-prototype` repo.**
-2. Extract this ZIP on your computer. On GitHub choose **Add file → Upload files** and upload the extracted **contents**, retaining folder structure including `.github/workflows/eurooffice-latest.yml`. Mac Finder shortcut **Command + Shift + .** reveals the `.github` folder. Do not upload the ZIP itself.
-3. In the new repository open **Settings → Pages → Build and deployment** and choose **GitHub Actions**.
-4. Open **Actions → EuroOffice Latest Stable - Browser-only Experiment → Run workflow**. Leave `release_tag` **blank** to resolve the newest stable release automatically. Or enter e.g. `v9.3.5` to test a specific official tag. Uploading the files to `main` also starts a run using latest stable.
-5. The Ubuntu GitHub runner downloads the large official `.deb` directly. **You do not need to upload the 600 MB package, install anything locally, or connect GitHub to ChatGPT.**
-6. When the workflow completes, check its **job summary** and `dist/office/eurooffice-poc-build.json` for the selected engine and pinned converter versions. Open the new repository's GitHub Pages URL.
-7. Click **Check deployed converter assets**, then open a **fictional** `.docx`, edit its tables and text, export DOCX and PDF, reopen the exported DOCX, compare PDF pagination and formatting, and try read-only mode. The test page displays the two versions separately.
+1. `scripts/resolve-release.mjs` retrieves GitHub's latest stable `Euro-Office/DocumentServer` release. Any unique, large `.deb` asset may be considered, irrespective of arbitrary filename. It refuses multiple candidates.
+2. `scripts/build-poc.sh` downloads the selected asset and uses `dpkg-deb` to verify the **internal package name, version and architecture**. Filename alone is not trusted. GitHub `sha256` digest is checked when provided.
+3. `scripts/prepare-release-core.sh` checks out the *same release tag* from the official DocumentServer repository and extracts its **exact `core` Git submodule commit**. It verifies the checked-out SHA.
+4. `scripts/port-wasm-changes.py` derives CryptPad's WASM source modifications by comparing its pinned `core` against the ONLYOFFICE `v9.3.0.140` baseline cited in CryptPad's documentation.
+5. `scripts/apply-wasm-port.py` attempts to port only these changes onto an isolated copy of the release-matched Euro-Office core, with **no fuzzy patching**. If source differences cannot be reconciled safely, the build **fails** rather than copying an old converter.
+6. `scripts/build-matching-wasm.sh` builds the modified matched source with the pinned CryptPad Dockerfile/Emscripten recipe. It extracts `x2t.js` and `x2t.wasm` directly from the same build, verifies their ABI and generates SHA-256 provenance.
+7. The pinned Ranuts browser integration and Euro-Office editor files are assembled. The converter binaries are installed AFTER the Ranuts build as well, preventing old `.wasm.br` from replacing the new converter. Packaging verifies the final hashes and deploys **only** verified static assets.
 
-### Version selection semantics
+## What is NOT guaranteed
 
-`/releases/latest` returns the latest published **non-prerelease** GitHub Release. Each workflow run resolves it afresh; builds are reproducible at the *resolved version*, but not permanently pinned to a fixed version across separate runs. The selected tag/asset is printed in Actions and embedded in output metadata. Use `release_tag` when you want to repeat a particular version. **This workflow does not automatically run when Euro-Office publishes a release**; it looks up the latest when you run it or push files.
-
-### Authenticity and checks
-
-The release resolver checks the official `Euro-Office/DocumentServer` GitHub API, rejects unexpected asset hosts/paths, verifies the release tag and filename, and uses the asset SHA-256 `digest` from GitHub metadata **when available**. If GitHub exposes no digest, it prints a warning and records a downloaded SHA-256, but that checksum alone is not independent verification. You can set the repository variable `EUROOFFICE_DEB_SHA256` to an independently verified checksum. The RC1 converter's exact previously checked SHA256 digests are always required and both converter assets must use matching WASM imports.
-
-### What happens when the release changes
-
-If a newer version (e.g. v9.3.6 or v9.4.x) introduces different SDK structures or an incompatible internal document format, the transplant or browser runtime may fail. That is an expected and useful experimental outcome; do **not** disable the integrity tests or rewrite engine APIs blindly. The next engineering task would be adapting the browser-only controller and rebuilding `x2t` from the matching tagged Euro-Office core source.
-
-### Missing converter package fallback
-
-The build downloads the previously confirmed `@kreijstal/eurooffice-sdkjs-common@9.3.5-rc.1.build.1`. If it is no longer available from npm, use the original archive you already possess: in your **new test repository**, create a GitHub Release with tag `editor-inputs` and attach **`eurooffice-sdkjs-common-9.3.5-rc.1.build.1.tgz`**. The build has an exact-name fallback for that asset. Do not upload the `.tgz` into the Git source directory. Never upload clinical files or credentials.
+- CryptPad's original WASM source modifications **may not apply** to the newer official Euro-Office core. This is the largest unresolved risk. Porting changes across versions requires human source review when conflicts occur.
+- Even if the native code compiles, browser loading and DOCX/PDF import/export must be tested. A matching source revision and correct `x2t.js`/`x2t.wasm` pair do **not** prove document-format compatibility or layout fidelity.
+- Docker dependencies are substantial. This has **not** been compiled against the official 9.3.5 source in this environment; network downloads of upstream components are not available here.
+- Future releases may alter the `.deb` structure, the `sdkjs` browser API, or WASM compiler requirements. No version is silently substituted.
+- Publication on GitHub Pages is a technical prototype only, not a hospital deployment or licensing approval.
 
 ## Troubleshooting
 
-- **Resolve release fails:** Latest stable release missing or unexpected `.deb` asset. Check official <https://github.com/Euro-Office/DocumentServer/releases> and send the first error. Do not guess an asset URL.
-- **Download or digest fails:** Official `.deb` inaccessible or different from its advertised SHA256. Stop and investigate.
-- **Transplant fails:** The publisher's RC1 offline patch probably no longer matches the newer compiled editor. This requires a source-level compatibility update, not disabling the guard.
-- **WASM/JS pair fails:** Keep the verified matching JS/WASM. The earlier Ranuts `env`/WASI build must never overwrite it.
-- **DOCX opens but fails export or loses formatting:** This likely indicates a *different-version editor/converter compatibility problem*. Provide the test document only if fictional, and the diagnostic log.
-- **Workflow succeeds but editor cannot open:** Inspect browser console and network errors, then compare exported files with the known-working RC1 test.
+| Failure | Meaning |
+|---|---|
+| `Expected exactly one large .deb` | GitHub release has no usable/unique Debian artifact. Listed filenames show what is available. |
+| `Unexpected Debian package identity` | The asset has the wrong internal package name, version or architecture. |
+| `Core checkout does not match release gitlink` | Cannot obtain the exact source used by official release. |
+| `WASM port does not apply cleanly` | The older Emscripten changes cannot safely be applied to the new core. A source-level port is necessary. No RC1 binary is used. |
+| Docker `No space left on device` / OOM | Standard GitHub runner insufficient for full C++ WASM compilation. Consider larger Linux runner. |
+| `Unexpected WASM ABI imports` | Generated WASM/JS ABI differs from the browser bridge; requires adapting the loader, not bypassing checks. |
+| DOCX opens but exports incorrectly | Source revisions match, but runtime integration or document format has changed. Compare against working RC1. |
 
-## Files and licensing
+## Licensing and provenance
 
-- `scripts/resolve-release.mjs`: official GitHub stable-release selection; supports optional manual tag.
-- `scripts/build-poc.sh`: versions, official `.deb` extraction, compatibility patches, pinned RC1 converter and full Vite build.
-- `scripts/vendor/`: pinned author-supplied Ranuts patch and Euro-Office transplant script.
-- `scripts/package-site.mjs`: Word-only GitHub Pages packaging, license notices, safe static paths and converter integrity.
-- `scripts/verify-site.mjs`: published site checks and version metadata.
-- `site/`: standalone browser-only fictional DOCX test UI.
-- `tests/`: deterministic release selection, security checks, converter ABI and publishing regression tests.
-- `.github/workflows/eurooffice-latest.yml`: independent test build and deployment.
+The editor incorporates code from [Ranuts/document](https://github.com/ranuts/document), [Euro-Office](https://github.com/Euro-Office/DocumentServer), and [CryptPad's x2t WASM recipe](https://github.com/cryptpad/onlyoffice-x2t-wasm). The corresponding AGPL and third-party notices must be preserved, reviewed, and completed before publicly distributing compiled binaries. Font licensing is particularly important. The generated Pages site is a research demonstration only.
 
-This hybrid redistributes or derives from AGPL-covered Ranuts and Euro-Office components. Preserve the relevant copyright notices, corresponding source, build modifications and required license materials if distributing compiled releases. Consult appropriate reviewers before any clinical use. This GitHub Pages prototype must use fictional documents only.
+## Tests in this source ZIP
 
-## Current verification status
-
-The supplied source and tests were checked locally, and the packaging workflow has synthetic smoke tests. **The full newest-release download and browser DOCX/PDF round trip are not verified in the authoring environment.** They must run on your new GitHub Actions runner and browser. Your successful RC1 prototype is the reference baseline.
+`node --test tests/*.test.mjs` checks release resolution, renamed `.deb` behavior, source version pinning, error guards, and the absence of the old RC1 binary path. Syntax checks cover shell scripts, Node scripts and the source-port Python files. **These are not end-to-end build, browser or licensing tests.**

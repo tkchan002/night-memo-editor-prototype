@@ -1,132 +1,72 @@
 #!/usr/bin/env bash
-# Browser-only Euro-Office/Ranuts proof-of-concept. Execute on GitHub Actions Ubuntu.
+# APPROACH B: build the browser converter from the SAME Euro-Office core commit
+# as the DocumentServer release. No fallback to old x2t binaries.
 set -Eeuo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
-ROOT="$PWD"
-WORK="$ROOT/.work"
-RANUTS="$WORK/ranuts"
-EO="$WORK/eurooffice"
-DOWNLOAD="$WORK/downloads"
-mkdir -p "$EO" "$DOWNLOAD"
-
-if [[ ! -f "$RANUTS/package.json" ]]; then
-  echo 'ERROR: Ranuts checkout missing. GitHub Actions must check out the pinned revision into .work/ranuts.' >&2
-  exit 1
-fi
-if [[ "$(git -C "$RANUTS" rev-parse HEAD)" != '1301bb8bdac9092c4eb88a6f2f4ff5080cec68bd' ]]; then
-  echo 'ERROR: Unexpected Ranuts commit; refusing to apply version-specific offline patches.' >&2
-  exit 1
-fi
-
-# Selection is resolved from the official GitHub Releases API by the workflow.
-# Never invent a version, download a nightly, or silently fall back to RC1.
-: "${EO_RELEASE_TAG:?Run scripts/resolve-release.mjs first}"
-: "${EO_RELEASE_VERSION:?Missing resolved version}"
-: "${EO_DEB_URL:?Missing official release asset URL}"
-: "${EO_DEB_NAME:?Missing official release asset name}"
-[[ "$EO_RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-.][a-zA-Z0-9.]+)?$ ]] || { echo 'Invalid resolved release tag' >&2; exit 1; }
-[[ "$EO_DEB_NAME" == "euro-office-documentserver_${EO_RELEASE_VERSION}_amd64.deb" ]] || { echo 'Release asset name/version mismatch' >&2; exit 1; }
-[[ "$EO_DEB_URL" == "https://github.com/Euro-Office/DocumentServer/releases/download/${EO_RELEASE_TAG}/${EO_DEB_NAME}" ]] || { echo 'Unexpected official download URL' >&2; exit 1; }
-DEB="$DOWNLOAD/$EO_DEB_NAME"
-if [[ ! -s "$DEB" ]]; then
-  echo "Downloading official Euro-Office ${EO_RELEASE_TAG} .deb from the resolved release."
-  curl --fail --location --retry 3 --retry-delay 5 --connect-timeout 30 --max-time 1800 --output "$DEB" "$EO_DEB_URL"
-fi
-[[ -s "$DEB" ]] || { echo 'ERROR: .deb download is empty' >&2; exit 1; }
+ROOT="$PWD"; WORK="$ROOT/.work"; RANUTS="$WORK/ranuts"; EO="$WORK/eurooffice"
+mkdir -p "$WORK/downloads" "$EO"
+: "${EO_RELEASE_TAG:?Resolve release first}"
+: "${EO_RELEASE_VERSION:?Missing version}"
+: "${EO_DEB_NAME:?Missing .deb name}"
+: "${EO_DEB_URL:?Missing .deb url}"
+[[ "$EO_DEB_NAME" =~ ^[A-Za-z0-9_.+~-]+\.deb$ ]] || { echo 'Unsafe .deb filename'; exit 1; }
+[[ "$(git -C "$RANUTS" rev-parse HEAD)" == '1301bb8bdac9092c4eb88a6f2f4ff5080cec68bd' ]] || { echo 'Wrong Ranuts commit'; exit 1; }
+node --input-type=module <<'NODE'
+import {readFileSync} from 'node:fs';
+const m=JSON.parse(readFileSync('.work/release-selection.json'));
+for(const [env,key] of [['EO_RELEASE_TAG','tag'],['EO_DEB_NAME','name'],['EO_DEB_URL','url'],['EO_RELEASE_VERSION','version']]){
+  if(m[key]!==process.env[env])throw Error(`Release metadata changed at ${env}`);
+}
+NODE
+DEB="$WORK/downloads/$EO_DEB_NAME"
+curl --fail --location --retry 3 --connect-timeout 30 --max-time 2400 -o "$DEB" "$EO_DEB_URL"
+[[ -s "$DEB" ]] || { echo 'Empty package'; exit 1; }
 if [[ -n "${EO_RELEASE_ASSET_SHA256:-}" ]]; then
-  echo "${EO_RELEASE_ASSET_SHA256}  ${DEB}" | sha256sum --check --status || { echo 'ERROR: Official release asset SHA256 mismatch.' >&2; exit 1; }
-  echo 'PASS: downloaded release asset matches official GitHub SHA256 digest.'
-else
-  echo 'WARNING: GitHub asset metadata had no digest; recorded SHA256 is informational, not independently authenticated.'
+  echo "${EO_RELEASE_ASSET_SHA256}  ${DEB}" | sha256sum -c -
 fi
-if [[ -n "${EUROOFFICE_DEB_SHA256:-}" ]]; then
-  echo "${EUROOFFICE_DEB_SHA256}  ${DEB}" | sha256sum --check --status || { echo 'ERROR: manually configured .deb SHA256 mismatch.' >&2; exit 1; }
-fi
-sha256sum "$DEB" | tee "$DOWNLOAD/eurooffice-deb-sha256.txt"
-echo "Official editor version: ${EO_RELEASE_TAG}"
-echo 'Browser converter version: 9.3.5-rc.1.build.1 (matching stable converter not available; mixed-version experiment).'
-
+sha256sum "$DEB" | tee "$WORK/downloads/official-deb.sha256"
+PACKAGE_NAME="$(dpkg-deb -f "$DEB" Package)"
+PACKAGE_VERSION="$(dpkg-deb -f "$DEB" Version)"
+PACKAGE_ARCH="$(dpkg-deb -f "$DEB" Architecture)"
+echo "Official package metadata: name=${PACKAGE_NAME}, version=${PACKAGE_VERSION}, arch=${PACKAGE_ARCH}"
+[[ "$PACKAGE_NAME" == 'euro-office-documentserver' ]] || { echo 'Unexpected Debian package identity'; exit 1; }
+[[ "$PACKAGE_ARCH" == 'amd64' ]] || { echo 'Not an AMD64 package'; exit 1; }
+[[ "$PACKAGE_VERSION" == "$EO_RELEASE_VERSION" || "$PACKAGE_VERSION" == "$EO_RELEASE_VERSION"-* ]] || { echo 'Debian package version differs from release'; exit 1; }
 EO_ROOT="$EO/var/www/euro-office/documentserver"
-if [[ ! -d "$EO_ROOT/web-apps" ]]; then
-  echo 'Extracting required components only (no installation of the Debian package).'
-  # Keep all linked shared assets; the publisher's replacement script handles them.
-  dpkg-deb --fsys-tarfile "$DEB" | tar -x -C "$EO" \
-    ./var/www/euro-office/documentserver/sdkjs \
-    ./var/www/euro-office/documentserver/web-apps \
-    ./var/www/euro-office/documentserver/dictionaries
-fi
-for required in "$EO_ROOT/sdkjs/word/sdk-all-min.js" "$EO_ROOT/web-apps/apps/documenteditor/main/app.js"; do
-  [[ -f "$required" ]] || { echo "ERROR: Missing from official Debian package: $required" >&2; exit 1; }
+mkdir -p "$EO"
+dpkg-deb --fsys-tarfile "$DEB" | tar -x -C "$EO" \
+  ./var/www/euro-office/documentserver/sdkjs \
+  ./var/www/euro-office/documentserver/web-apps \
+  ./var/www/euro-office/documentserver/dictionaries
+for p in "$EO_ROOT/sdkjs/word/sdk-all-min.js" "$EO_ROOT/web-apps/apps/documenteditor/main/app.js"; do
+  [[ -s "$p" ]] || { echo "Missing from official release: $p"; exit 1; }
 done
-
-echo 'Retrieving the matching x2t WebAssembly package (exact pinned version).'
-PKG_NAME='@kreijstal/eurooffice-sdkjs-common@9.3.5-rc.1.build.1'
-PKG_ARCHIVE="$DOWNLOAD/eurooffice-sdkjs-common-9.3.5-rc.1.build.1.tgz"
-if [[ ! -s "$PKG_ARCHIVE" ]]; then
-  if npm pack "$PKG_NAME" --pack-destination "$DOWNLOAD" --ignore-scripts --silent; then
-    packed=$(find "$DOWNLOAD" -maxdepth 1 -name '*eurooffice-sdkjs-common*9.3.5-rc.1.build.1*.tgz' -print -quit)
-    [[ -n "$packed" ]] && mv "$packed" "$PKG_ARCHIVE"
-  fi
-fi
-# If npm publication disappears, maintainers may upload the already owned archive
-# as a GitHub Release asset (tag: editor-inputs) through the browser.
-if [[ ! -s "$PKG_ARCHIVE" ]]; then
-  echo 'npm pack unavailable. Checking repository Release editor-inputs for a mirror.'
-  gh release download editor-inputs --repo "$GITHUB_REPOSITORY" \
-    --pattern 'eurooffice-sdkjs-common-9.3.5-rc.1.build.1.tgz' \
-    --dir "$DOWNLOAD" || true
-fi
-[[ -s "$PKG_ARCHIVE" ]] || { echo 'ERROR: matching x2t package unavailable; see README fallback (upload a Release asset via browser).' >&2; exit 1; }
-mkdir -p "$WORK/sdk-common"
-tar -xzf "$PKG_ARCHIVE" -C "$WORK/sdk-common" \
-  package/sdkjs/common/wasm/x2t/x2t.wasm \
-  package/sdkjs/common/wasm/x2t/x2t.js
-X2T="$WORK/sdk-common/package/sdkjs/common/wasm/x2t"
-echo '841ff9b648f0a03a6e610e6f1d0e822a526dd3142eb43a64101653963f4fc35e  '"$X2T/x2t.wasm" | sha256sum --check --status || {
-  echo 'ERROR: WASM digest does not match the uploaded and inspected 9.3.5-rc.1.build.1 package.' >&2; exit 1;
-}
-echo '66c2fe0e6de280d81643ffc7ba31cd9a5205c004b72227c08e78a0821ba0e520  '"$X2T/x2t.js" | sha256sum --check --status || {
-  echo 'ERROR: x2t.js digest does not match the matching WASM package.' >&2; exit 1;
-}
-
-printf 'Checking author-provided Ranuts patch against pinned upstream\n'
+# Discover EXACT core gitlink from the tagged DocumentServer source.
+# Do not use core/main, core/latest, an estimated matching version, or ONLYOFFICE upstream.
+bash "$ROOT/scripts/prepare-release-core.sh"
+# CryptPad's Emscripten adaptation is ported to that source in a strict patching step.
+# It may fail for future releases. This is correct; never substitute RC1 converter.
+bash "$ROOT/scripts/build-matching-wasm.sh"
+X2T="$WORK/matching-converter"
+node "$ROOT/scripts/check-converter-pair.mjs" "$X2T"
+# Preserve the tested Ranuts browser integration while upgrading the engine.
 git -C "$RANUTS" apply --check "$ROOT/scripts/vendor/ranuts-document.patch"
 git -C "$RANUTS" apply "$ROOT/scripts/vendor/ranuts-document.patch"
-
-printf 'Applying the author-provided browser-only engine transplant\n'
 python3 "$ROOT/scripts/vendor/eurooffice-into-ranuts.py" "$EO_ROOT" "$RANUTS"
-# The original Ranuts source carries x2t.wasm.br built against an unrelated
-# WASI/`env` ABI.  The verified EuroOffice JS expects module `a`. Never leave
-# that precompressed file where Vite can copy it into the compiled distribution.
 CONVERTER_REL='sdkjs/common/wasm/x2t'
 install -Dm644 "$X2T/x2t.wasm" "$RANUTS/public/$CONVERTER_REL/x2t.wasm"
 install -Dm644 "$X2T/x2t.js" "$RANUTS/public/$CONVERTER_REL/x2t.js"
-rm -f "$RANUTS/public/$CONVERTER_REL/x2t.wasm.br" \
-      "$RANUTS/public/$CONVERTER_REL/x2t.wasm.gz"
+rm -f "$RANUTS/public/$CONVERTER_REL/x2t.wasm.br" "$RANUTS/public/$CONVERTER_REL/x2t.wasm.gz"
 node "$ROOT/scripts/check-converter-pair.mjs" "$RANUTS/public/$CONVERTER_REL"
-
 node "$ROOT/scripts/check-transplant.mjs" "$RANUTS/public"
-
-printf 'Installing and building the exact pinned Ranuts application\n'
 pnpm --dir "$RANUTS" install --frozen-lockfile
-# Required for the original publisher's BASE_PATH patch.
 (cd "$RANUTS/packages/shared" && npx tsc -p tsconfig.json)
 pnpm --dir "$RANUTS" run build
-
-# `public/` and Vite's compiled `dist/` are distinct trees. Verify the exact
-# x2t pair at each boundary; copying before Vite alone did not prevent a
-# mismatched converter from appearing in the deployed runtime.
-node "$ROOT/scripts/check-converter-pair.mjs" "$X2T"
-# Vite sometimes re-copies public/ files. Remove both old compressed variants
-# and reinstall the canonical pinned pair AFTER the build as well.
-rm -f "$RANUTS/dist/$CONVERTER_REL/x2t.wasm.br" \
-      "$RANUTS/dist/$CONVERTER_REL/x2t.wasm.gz"
+rm -f "$RANUTS/dist/$CONVERTER_REL/x2t.wasm.br" "$RANUTS/dist/$CONVERTER_REL/x2t.wasm.gz"
 install -Dm644 "$X2T/x2t.wasm" "$RANUTS/dist/$CONVERTER_REL/x2t.wasm"
 install -Dm644 "$X2T/x2t.js" "$RANUTS/dist/$CONVERTER_REL/x2t.js"
 node "$ROOT/scripts/check-converter-pair.mjs" "$RANUTS/dist/$CONVERTER_REL"
-
-printf 'Packaging Word-only GitHub Pages build (no server)\n'
 node "$ROOT/scripts/package-site.mjs" "$RANUTS/dist" "$ROOT/dist"
 node "$ROOT/scripts/verify-site.mjs" "$ROOT/dist"
-node "$ROOT/scripts/check-converter-pair.mjs" "$ROOT/dist/office/sdkjs/common/wasm/x2t"
-echo 'PASS: static structure and integrity checks. Real browser edit/save/export tests still required.'
+node "$ROOT/scripts/check-converter-pair.mjs" "$ROOT/dist/office/$CONVERTER_REL"
+echo 'SUCCESS: built matched x2t and editor assets. Browser DOCX/PDF validation is still required.'

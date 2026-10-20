@@ -39,8 +39,8 @@ check(numbered.length>=100,`Too few generated/browser-font resources: ${numbered
 const metadata=JSON.parse(readFileSync(join(office,'eurooffice-poc-build.json'),'utf8'));
 check(metadata.officeBase.endsWith('/office/'),'Invalid editor base path');
 check(/^v\d+\.\d+\.\d+/.test(metadata.upstreamReleaseTag || ''), 'Missing resolved Euro-Office release tag');
-check(metadata.browserConverterVersion === '9.3.5-rc.1.build.1', 'Browser converter version incorrectly stated');
-check(metadata.mixedVersionExperiment === true, 'Mixed-version build must be marked experimental');
+check(metadata.browserConverterVersion === metadata.upstreamReleaseVersion, 'Editor and converter versions differ');
+check(metadata.mixedVersionExperiment === false, 'Unexpected mixed-version fallback');
 if (process.env.EO_RELEASE_TAG) check(metadata.upstreamReleaseTag === process.env.EO_RELEASE_TAG,
   `Deployed editor version ${metadata.upstreamReleaseTag} does not match selected ${process.env.EO_RELEASE_TAG}`);
 console.log(`PASS: PoC site structure, offline bridge, x2t WASM, gzip loader and ${numbered.length} numbered fonts. Browser compatibility not yet established.`);

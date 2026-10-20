@@ -62,6 +62,15 @@ test('standalone Pages packaging uses project base, never rewrites nested index 
    assert.ok(!existsSync(join(output,'office/sdkjs/cell')));
    const v=spawnSync(process.execPath,['scripts/verify-site.mjs',output],{cwd:repo,env,encoding:'utf8',timeout:25000});
    assert.equal(v.status,0,v.stderr||v.stdout);
+   // Real packaging (not merely release discovery) must accept the upstream
+   // Debian packaging revision and record the exact asset in provenance.
+   const revisedName = 'euro-office-documentserver_9.3.5-0_amd64.deb';
+   const revisedEnv = {...env, EO_DEB_NAME: revisedName};
+   const revised=spawnSync(process.execPath,['scripts/package-site.mjs',input,output],
+     {cwd:repo,env:revisedEnv,encoding:'utf8',timeout:25000});
+   assert.equal(revised.status,0,revised.stderr||revised.stdout);
+   const metadata=JSON.parse(readFileSync(join(output,'office/eurooffice-poc-build.json'),'utf8'));
+   assert.equal(metadata.upstreamReleaseAsset,revisedName);
  } finally { rmSync(temp,{recursive:true,force:true}); }
 });
 

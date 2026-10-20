@@ -1,0 +1,85 @@
+name: EuroOffice Approach B - Matched WASM Experimental Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Optional official stable release tag, e.g. v9.3.5. Blank = newest stable.'
+        type: string
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: eurooffice-approach-b-pages
+  cancel-in-progress: false
+
+jobs:
+  match-and-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 340
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: Ranuts/document
+          ref: 1301bb8bdac9092c4eb88a6f2f4ff5080cec68bd
+          path: .work/ranuts
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '11.4.0'
+          run_install: false
+      - name: Validate scripts and tests BEFORE large downloads
+        run: |
+          bash -n scripts/*.sh
+          python3 -m py_compile scripts/*.py
+          for f in scripts/*.mjs site/poc.js; do node --check "$f"; done
+          node --test tests/*.test.mjs
+      - name: Resolve latest stable EuroOffice release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EO_REQUESTED_TAG: ${{ inputs.release_tag }}
+        run: node scripts/resolve-release.mjs
+      - name: Disk budget preflight
+        run: |
+          df -h .
+          docker buildx version
+          echo 'IMPORTANT: full WASM compiler toolchain may exceed GitHub hosted runner disk/time limits.'
+      - name: Download official editor, resolve matching core and compile WASM
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/build-poc.sh
+      - name: Validate final static site and source provenance
+        run: |
+          node scripts/verify-site.mjs dist
+          node scripts/check-converter-pair.mjs dist/office/sdkjs/common/wasm/x2t
+          node --input-type=module -e 'import {readFileSync} from "node:fs";let x=JSON.parse(readFileSync("dist/office/eurooffice-poc-build.json"));if(x.upstreamReleaseTag!==process.env.EO_RELEASE_TAG||x.mixedVersionExperiment||!x.converterCoreCommit)process.exit(1);'
+      - uses: actions/configure-pages@v5
+      - name: Upload browser-only Pages artifacts
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+      - name: Deploy experimental Pages site
+        uses: actions/deploy-pages@v4
+        id: deployment
+      - name: Summarize matched sources
+        if: always()
+        run: |
+          {
+            echo '## Matched-source EuroOffice WASM experiment'
+            echo "- Selected EuroOffice: ${EO_RELEASE_TAG:-not resolved}"
+            echo "- Core commit: $(cat .work/official-core-commit.txt 2>/dev/null || echo not built)"
+            echo '- The previous RC1 converter is NOT used as a fallback.'
+            echo '- Browser DOCX/PDF fidelity still requires real tests before release.'
+          } >> "$GITHUB_STEP_SUMMARY"
