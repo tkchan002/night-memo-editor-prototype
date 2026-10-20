@@ -6,6 +6,8 @@ never dereference; only relative in-tree links may be installed. All conflicts
 are detected before mutating target source files or symlinks.
 """
 import json
+import hashlib
+import difflib
 import os
 import pathlib
 import shutil
@@ -14,8 +16,9 @@ import subprocess
 import sys
 from wasm_symlink_policy import validate_target
 
-if len(sys.argv) != 3:
-    raise SystemExit('usage: apply-wasm-port.py TARGET REPORT')
+if len(sys.argv) not in (3, 4) or (len(sys.argv) == 4 and sys.argv[3] != '--check'):
+    raise SystemExit('usage: apply-wasm-port.py TARGET REPORT [--check]')
+check_only = len(sys.argv) == 4
 
 target = pathlib.Path(sys.argv[1]).resolve()
 report = pathlib.Path(sys.argv[2]).resolve()
@@ -53,6 +56,42 @@ def read_regular(path):
     return path.read_bytes() if path.is_file() else None
 
 
+# Each genuine compatibility conflict is accompanied by source identities and
+# compact three-way review inputs. Byte-capped copies prevent multi-GB artifacts.
+MAX_REVIEW_BYTES = 1_000_000
+MAX_DIFF_BYTES = 100_000
+
+def snapshot(data):
+    if data is None:
+        return {'present': False}
+    return {'present': True, 'bytes': len(data), 'sha256': hashlib.sha256(data).hexdigest()}
+
+
+def write_review(name, reason, baseline=None, cryptpad=None, eurooffice=None,
+                 kind='regular-file'):
+    # The path originates in validated Git tracked entries or the validated
+    # manifest; use safe() even though this diagnostic is in a fresh folder.
+    folder = safe(conflicts_dir, name + '.inputs')
+    folder.mkdir(parents=True, exist_ok=True)
+    sources = {'baseline': baseline, 'cryptpad': cryptpad, 'eurooffice': eurooffice}
+    identities = {key: snapshot(value) for key, value in sources.items()}
+    for label, data in sources.items():
+        if data is not None and len(data) <= MAX_REVIEW_BYTES:
+            (folder / label).write_bytes(data)
+    for label, data in (('cryptpad', cryptpad), ('eurooffice', eurooffice)):
+        if baseline is None or data is None or len(data) > MAX_DIFF_BYTES or len(baseline) > MAX_DIFF_BYTES:
+            continue
+        try:
+            old = baseline.decode('utf-8').splitlines(keepends=True)
+            new = data.decode('utf-8').splitlines(keepends=True)
+        except UnicodeDecodeError:
+            continue
+        diff = difflib.unified_diff(old, new, fromfile='baseline', tofile=label)
+        (folder / ('baseline-to-' + label + '.diff')).write_text(''.join(diff))
+    return {'file': name, 'reason': reason, 'kind': kind,
+            'sources': identities, 'reviewDirectory': str(folder)}
+
+
 operations = []
 link_operations = []
 permission_operations = []
@@ -65,7 +104,7 @@ for name in manifest['changed'] + manifest['new'] + manifest['deleted']:
     a_path = safe(old_dir, name)
     b_path = safe(new_dir, name)
     if output.is_symlink() or (output.exists() and not output.is_file()):
-        conflicts.append({'file': name, 'reason': 'core path has an unexpected file type or symlink'})
+        conflicts.append(write_review(name, 'core path has an unexpected file type or symlink'))
         continue
     ours = read_regular(output)
     original = read_regular(a_path)
@@ -85,7 +124,7 @@ for name in manifest['changed'] + manifest['new'] + manifest['deleted']:
         wanted = '755' if new_mode == '100755' else '644'
         original_mode = '755' if old_mode == '100755' else '644' if old_mode else None
         if existing_mode not in (None, wanted, original_mode):
-            conflicts.append({'file': name, 'reason': 'core file permissions changed independently'})
+            conflicts.append(write_review(name, 'core file permissions changed independently', original, incoming, ours))
             continue
         permission_operations.append((name, int(wanted, 8)))
     if ours == incoming:
@@ -95,10 +134,10 @@ for name in manifest['changed'] + manifest['new'] + manifest['deleted']:
         operations.append((name, incoming))
         continue
     if original is None or incoming is None or ours is None:
-        conflicts.append({'file': name, 'reason': 'file added/deleted differently in EuroOffice'})
+        conflicts.append(write_review(name, 'file added/deleted differently in EuroOffice', original, incoming, ours))
         continue
     if b'\0' in ours or b'\0' in original or b'\0' in incoming:
-        conflicts.append({'file': name, 'reason': 'binary file changed on both sides'})
+        conflicts.append(write_review(name, 'binary file changed on both sides', original, incoming, ours))
         continue
     merged = subprocess.run(
         ['git', 'merge-file', '--diff3', '-p', '--', str(output), str(a_path), str(b_path)],
@@ -111,8 +150,9 @@ for name in manifest['changed'] + manifest['new'] + manifest['deleted']:
         preview = safe(conflicts_dir, name + '.merge')
         preview.parent.mkdir(parents=True, exist_ok=True)
         preview.write_bytes(merged.stdout)
-        conflicts.append({'file': name, 'reason': 'overlapping source edits; manual merge required',
-                          'preview': str(preview)})
+        entry = write_review(name, 'overlapping source edits; manual merge required', original, incoming, ours)
+        entry['preview'] = str(preview)
+        conflicts.append(entry)
     else:
         details = merged.stderr.decode('utf-8', 'replace')[:2000]
         raise SystemExit(f'git merge-file failed unexpectedly for {name}: {details}')
@@ -134,7 +174,7 @@ for name in manifest['links']:
             try:
                 validate_target(target, name, value)
             except ValueError as exc:
-                conflicts.append({'file': name, 'reason': f'{label} symlink is unsafe: {exc}'})
+                conflicts.append(write_review(name, f'{label} symlink is unsafe: {exc}', (old_link or '').encode() if old_link is not None else None, (new_link or '').encode() if new_link is not None else None, kind='symlink'))
                 break
     else:
         if path.is_symlink():
@@ -142,16 +182,20 @@ for name in manifest['links']:
         elif not os.path.lexists(path):
             current_link = None
         else:
-            conflicts.append({'file': name, 'reason': 'official core has non-symlink at symlink path'})
+            conflicts.append(write_review(name, 'official core has non-symlink at symlink path', kind='symlink'))
             continue
         if current_link == new_link:
             already_present.append(name)
         elif current_link == old_link:
             link_operations.append((name, new_link))
         else:
-            conflicts.append({'file': name, 'reason': 'EuroOffice changed symlink independently',
-                              'baseline': old_link, 'cryptpad': new_link,
-                              'official': current_link})
+            entry = write_review(name, 'EuroOffice changed symlink independently',
+                                 old_link.encode() if old_link is not None else None,
+                                 new_link.encode() if new_link is not None else None,
+                                 current_link.encode() if current_link is not None else None,
+                                 kind='symlink')
+            entry.update({'baseline': old_link, 'cryptpad': new_link, 'official': current_link})
+            conflicts.append(entry)
 
 results = {
     'format': 3,
@@ -161,6 +205,7 @@ results = {
     'changesPlanned': len(operations),
     'symlinkChangesPlanned': len(link_operations),
     'conflicts': conflicts,
+    'checkOnly': check_only,
 }
 result_path = report.parent / 'wasm-port-results.json'
 result_path.write_text(json.dumps(results, indent=2) + '\n')
@@ -171,9 +216,32 @@ if conflicts:
         print(f"  CONFLICT {item['file']}: {item['reason']}", file=sys.stderr)
     if len(conflicts) > 30:
         print(f'  ... and {len(conflicts)-30} more', file=sys.stderr)
-    print(f'No target source was modified. See {result_path} and merge previews '
-          'in the GitHub Actions diagnostic artifact.', file=sys.stderr)
+    summary_lines = [
+        'EuroOffice / CryptPad WASM SOURCE-COMPATIBILITY REVIEW',
+        '=====================================================',
+        f'{len(conflicts)} incompatible file(s). This is a source-version porting task, NOT a test failure.',
+        'No source changes were made. Do not automatically prefer CryptPad or EuroOffice for every conflict.',
+        'Inspect wasm-port-results.json, then individual *.inputs directories:',
+        '  baseline    = original ONLYOFFICE core v9.3.0.140',
+        '  cryptpad    = CryptPad-patched source',
+        '  eurooffice  = exact release-pinned EuroOffice source',
+        '  baseline-to-*.diff = changes on each branch',
+        'Input copies larger than 1 MB are omitted; SHA-256 identities are still recorded.',
+        '',
+    ]
+    for item in conflicts:
+        summary_lines.append(item['file'] + ' :: ' + item['reason'])
+    summary_file = work / 'review-summary.txt'
+    summary_file.write_text('\n'.join(summary_lines) + '\n')
+    print(f'No target source was modified. Review {summary_file} and {result_path} '
+          'in the GitHub Actions diagnostics artifact.', file=sys.stderr)
     raise SystemExit(1)
+
+if check_only:
+    print(f'Dry-run source compatibility: {len(operations)} file changes, '
+          f'{len(link_operations)} symlink changes, {len(already_present)} already present; '
+          'no target file modified.')
+    raise SystemExit(0)
 
 # Stage all new regular file contents and link objects before modifying target.
 for name, data in operations:

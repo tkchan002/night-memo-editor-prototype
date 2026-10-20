@@ -384,3 +384,53 @@ test('missing official link conflicts if upstream baseline expected it to exist'
     assert.equal(readFileSync(join(c,'f.cpp'),'utf8'),'a\n');
   });
 });
+
+test('COMPATIBILITY: deleted upstream file changed independently produces reviewable three-way evidence',()=>{
+  scenario({'Common/3dParty/v8/nc-build.py':'base build\n','X2tConverter/x.cpp':'old\n'},
+    {'X2tConverter/x.cpp':'wasm\n'},
+    {'Common/3dParty/v8/nc-build.py':'euro-specific build\n','X2tConverter/x.cpp':'old\n'},
+    ({c,r,apply})=>{
+      const res=apply();
+      assert.notEqual(res.status,0);
+      assert.equal(readFileSync(join(c,'X2tConverter/x.cpp'),'utf8'),'old\n');
+      assert.equal(readFileSync(join(c,'Common/3dParty/v8/nc-build.py'),'utf8'),'euro-specific build\n');
+      const result=JSON.parse(readFileSync(join(dirname(r),'wasm-port-results.json')));
+      const entry=result.conflicts.find(v=>v.file==='Common/3dParty/v8/nc-build.py');
+      assert.ok(entry,'expected conflict missing');
+      assert.equal(entry.sources.baseline.present,true);
+      assert.equal(entry.sources.cryptpad.present,false);
+      assert.equal(entry.sources.eurooffice.present,true);
+      assert.match(entry.sources.eurooffice.sha256,/^[0-9a-f]{64}$/);
+      const inputs=join(dirname(r),'wasm-port/conflicts/Common/3dParty/v8/nc-build.py.inputs');
+      assert.equal(readFileSync(join(inputs,'baseline'),'utf8'),'base build\n');
+      assert.equal(readFileSync(join(inputs,'eurooffice'),'utf8'),'euro-specific build\n');
+      assert.ok(existsSync(join(inputs,'baseline-to-eurooffice.diff')));
+      assert.ok(existsSync(join(dirname(r),'wasm-port/review-summary.txt')));
+    });
+});
+
+test('COMPATIBILITY: --check passes without writing official files, then explicit apply writes',()=>{
+  scenario({'a.cpp':'old\n'}, {'a.cpp':'wasm\n'}, {'a.cpp':'old\n'}, ({c,r,apply})=>{
+    const result=invoke(['python3','scripts/apply-wasm-port.py',c,r,'--check'],false);
+    assert.equal(result.status,0,result.stderr);
+    assert.match(result.stdout,/Dry-run source compatibility/);
+    assert.equal(readFileSync(join(c,'a.cpp'),'utf8'),'old\n');
+    assert.equal(JSON.parse(readFileSync(join(dirname(r),'wasm-port-results.json'))).status,'ready');
+    assert.equal(apply().status,0);
+    assert.equal(readFileSync(join(c,'a.cpp'),'utf8'),'wasm\n');
+  });
+});
+
+test('COMPATIBILITY: --check conflicts are fail-closed and save all conflicting evidence',()=>{
+  scenario({'a.cpp':'before\n','b.cpp':'before\n'},
+    {'a.cpp':'crypto\n','b.cpp':'crypto\n'},
+    {'a.cpp':'euro\n','b.cpp':'euro\n'}, ({c,r})=>{
+      const check=invoke(['python3','scripts/apply-wasm-port.py',c,r,'--check'],false);
+      assert.notEqual(check.status,0);
+      const result=JSON.parse(readFileSync(join(dirname(r),'wasm-port-results.json')));
+      assert.equal(result.conflicts.length,2);
+      assert.equal(result.checkOnly,true);
+      assert.equal(readFileSync(join(c,'a.cpp'),'utf8'),'euro\n');
+      assert.equal(readFileSync(join(c,'b.cpp'),'utf8'),'euro\n');
+    });
+});

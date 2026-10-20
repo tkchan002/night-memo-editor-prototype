@@ -6,24 +6,9 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"; cd "$ROOT"
 WORK="$ROOT/.work"
 RECIPE="$WORK/cryptpad-wasm-recipe"
 # Known recipe revision from the already verified @kreijstal publisher scripts.
-RECIPE_COMMIT='95f775fd3c42fae9e9af66ca072d3da3763e6c76'
-BASELINE="$WORK/onlyoffice-cryptpad-baseline"
-if [[ ! -d "$RECIPE/.git" ]]; then
-  git clone https://github.com/cryptpad/onlyoffice-x2t-wasm.git "$RECIPE"
-fi
-git -C "$RECIPE" checkout --detach "$RECIPE_COMMIT"
-[[ "$(git -C "$RECIPE" rev-parse HEAD)" == "$RECIPE_COMMIT" ]] || exit 1
-# CryptPad README identifies this exact baseline of the ONLYOFFICE core.
-# The delta to its modified core is the WASM port that we try to apply to EO.
-if [[ ! -d "$BASELINE/.git" ]]; then
-  git clone --filter=blob:none --depth 1 --branch v9.3.0.140 https://github.com/ONLYOFFICE/core.git "$BASELINE"
-fi
-[[ -f "$BASELINE/X2tConverter/X2tConverter.pro" || -d "$BASELINE/X2tConverter" ]] || {
-  echo 'Unexpected baseline core layout' >&2; exit 1;
-}
-python3 "$ROOT/scripts/port-wasm-changes.py" \
-  "$BASELINE" "$RECIPE/core" "$WORK/official-source/core" \
-  "$WORK/wasm-port-report.json"
+# The preflight performs a non-mutating three-way merge against the exact
+# official core and writes full diagnostics when incompatible.
+bash "$ROOT/scripts/preflight-wasm-port.sh"
 # Replace the recipe's bundled core with the exact release core PLUS the ported
 # WebAssembly adjustments. Retain the recipe build tooling and Emscripten flags.
 rm -rf "$RECIPE/core"

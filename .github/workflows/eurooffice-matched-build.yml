@@ -51,6 +51,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           EO_REQUESTED_TAG: ${{ inputs.release_tag }}
         run: node scripts/resolve-release.mjs
+      - name: Preflight exact-source WASM compatibility BEFORE large Debian download
+        run: |
+          bash scripts/prepare-release-core.sh
+          bash scripts/preflight-wasm-port.sh
       - name: Disk budget preflight
         run: |
           df -h .
@@ -87,6 +91,7 @@ jobs:
             .work/wasm-port-report.json
             .work/wasm-port-results.json
             .work/wasm-port/conflicts/
+            .work/wasm-port/review-summary.txt
       - name: Summarize matched sources
         if: always()
         run: |
